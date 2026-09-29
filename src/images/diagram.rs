@@ -27,10 +27,10 @@ const CACHE_CAPACITY: usize = 32;
 /// on a default 2 MiB stack, a 2000-node chain fit in 512 KiB but overflowed
 /// 256 KiB, putting one frame between 131 and 262 bytes and the exhaustion
 /// point near 10,000 nodes. A node and an edge count equally here, so a simple
-/// path spends half the budget on nodes and recurses at most 256 times, under
-/// 70 KiB. Subgraphs share the budget because nesting is walked recursively
+/// path spends half the budget on nodes and recurses at most 512 times, under
+/// 140 KiB. Subgraphs share the budget because nesting is walked recursively
 /// too.
-pub(super) const MAX_GRAPH_ELEMENTS: usize = 512;
+pub(super) const MAX_GRAPH_ELEMENTS: usize = 1024;
 
 /// Source cap checked before parsing, so an oversized fence costs nothing and
 /// a pathological one cannot abort a worker. It is also the ultimate bound on
@@ -38,7 +38,7 @@ pub(super) const MAX_GRAPH_ELEMENTS: usize = 512;
 /// per frame to terminate, so no traversal can be deeper than the source is
 /// long. The shared CPU worker stack is sized for that whole range rather than for
 /// one grammar's nesting cost.
-pub(super) const MAX_SOURCE_BYTES: usize = 8 * 1024;
+pub(super) const MAX_SOURCE_BYTES: usize = 32 * 1024;
 
 /// Brace-nesting cap for label markup. The text normalizer recurses once per
 /// `{...}` group it rewrites, so this bounds that recursion directly and turns
@@ -53,6 +53,9 @@ pub(super) const MAX_LABEL_NESTING: usize = 64;
 pub(super) struct DiagramTheme {
 	render: mermaid_rs_renderer::Theme,
 	generic_font_families: Vec<(String, Vec<String>)>,
+	/// The layout's shape goal. Part of the theme because it changes the SVG
+	/// the same way a color does, so the cache must treat it the same way.
+	aspect_ratio: Option<f32>,
 	/// The reader's own faces, for the renderer's measurements.
 	metrics: Option<Arc<dyn mermaid_rs_renderer::TextMetrics>>,
 	fingerprint: u64,
@@ -78,6 +81,7 @@ impl DiagramTheme {
 		Self {
 			render: self.render.clone(),
 			generic_font_families: self.generic_font_families.clone(),
+			aspect_ratio: self.aspect_ratio,
 			metrics: Some(metrics),
 			fingerprint: self.fingerprint,
 		}
@@ -90,10 +94,14 @@ impl DiagramTheme {
 fn fingerprint(
 	render: &mermaid_rs_renderer::Theme,
 	generic_font_families: &[(String, Vec<String>)],
+	aspect_ratio: Option<f32>,
 ) -> u64 {
 	crate::document::fingerprint(&(
 		format!("{render:?}"),
 		generic_font_families,
+		// Bits, because a float is not `Hash` and the goal is identity
+		// anyway: the same spelling must collide, two spellings need not.
+		aspect_ratio.map(f32::to_bits),
 	))
 }
 
@@ -173,9 +181,14 @@ pub(super) fn resolve(
 		pie_opacity
 	);
 	DiagramTheme {
-		fingerprint: fingerprint(&render, &generic_font_families),
+		fingerprint: fingerprint(
+			&render,
+			&generic_font_families,
+			style.aspect_ratio,
+		),
 		render,
 		generic_font_families,
+		aspect_ratio: style.aspect_ratio,
 		metrics,
 	}
 }
@@ -355,13 +368,29 @@ fn render_bounded(code: &str, theme: &DiagramTheme) -> Result<String> {
 	}
 	let config = mermaid_rs_renderer::LayoutConfig {
 		metrics: theme.metrics.clone(),
+		preferred_aspect_ratio: theme.aspect_ratio,
 		..Default::default()
 	};
 	let render = &theme.render;
-	{
-		let layout =
-			mermaid_rs_renderer::compute_layout(graph, render, &config);
-		Ok(mermaid_rs_renderer::render_svg(&layout, render, &config))
+	let draw = |config: &mermaid_rs_renderer::LayoutConfig| {
+		let layout = mermaid_rs_renderer::compute_layout(graph, render, config);
+		Ok(mermaid_rs_renderer::render_svg(&layout, render, config))
+	};
+	match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+		draw(&config)
+	})) {
+		Err(_) if theme.aspect_ratio.is_some() => {
+			// The dependency's own stage validation can reject a stretched
+			// layout on dense graphs. A shape goal is cosmetic, so a diagram
+			// it breaks still draws with its natural shape.
+			let natural = mermaid_rs_renderer::LayoutConfig {
+				metrics: theme.metrics.clone(),
+				..Default::default()
+			};
+			draw(&natural)
+		}
+		Err(_) => Err(anyhow!("Mermaid: renderer panicked")),
+		Ok(result) => result,
 	}
 }
 
@@ -481,13 +510,32 @@ mod tests {
 
 	#[test]
 	fn over_budget_graph_is_rejected_before_layout() {
-		// 300 edges with 301 nodes is over the element budget but well under
+		// 600 edges with 601 nodes is over the element budget but well under
 		// the source cap, so this exercises the graph check on its own.
 		let mut code = String::from("flowchart TD\n");
-		for i in 0..300 {
+		for i in 0..600 {
 			code.push_str(&format!("N{i}-->N{}\n", i + 1));
 		}
 		let error = svg(&code, &default_theme()).unwrap_err().to_string();
 		assert!(error.contains("graph elements"), "{error}");
+	}
+
+	/// The `width` attribute of a rendered SVG, which the layout decides.
+	fn svg_width(svg: &str) -> f32 {
+		let start = svg.find("width=\"").unwrap() + "width=\"".len();
+		let end = svg[start..].find('"').unwrap() + start;
+		svg[start..end].parse().unwrap()
+	}
+
+	#[test]
+	fn an_aspect_ratio_reshapes_the_layout() {
+		// A tall chain sits far below a 4:1 goal, so the layout stretches its
+		// spacing toward it, and the two themes must not share a cache entry.
+		let chain = (1..8).map(|i| format!("-->A{i}")).collect::<String>();
+		let code = format!("flowchart TD\nA0{chain}");
+		let natural = svg_width(&svg(&code, &default_theme()).unwrap());
+		let wide =
+			svg_width(&svg(&code, &theme("aspect_ratio = 4.0")).unwrap());
+		assert!(wide > natural * 2.0, "{natural} vs {wide}");
 	}
 }

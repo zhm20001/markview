@@ -111,6 +111,8 @@ struct Entry {
 	stamp: Option<(u64, Option<SystemTime>)>,
 	busy: bool,
 	svg: bool,
+	/// The size these pixels were made at — or, after a failure, the request
+	/// the failure served — which `resize` compares the demand against.
 	raster: Option<(u32, u32)>,
 	/// Fingerprint of the diagram theme these pixels were rendered with, so a
 	/// stylesheet change redraws a diagram instead of keeping its old colors.
@@ -389,7 +391,10 @@ impl Images {
 							info: Default::default(),
 							stamp: stamp(&source),
 							busy: false,
-							svg: false,
+							// A diagram is SVG before it decodes, so its
+							// first raster is asked at the size the page
+							// displays instead of the intrinsic one.
+							svg: matches!(source, Source::Diagram(_)),
 							raster: None,
 							theme,
 						},
@@ -500,14 +505,16 @@ impl Images {
 			// A failure the old theme caused — a drawing past the pixel
 			// limit, say — does not survive it, or the working theme that
 			// follows could never bring the diagram back. A job still in
-			// flight is cancelled before the next theme is scheduled.
+			// flight is cancelled before the next theme is scheduled. A
+			// failure at one size gets a fresh chance when the page asks for
+			// a different one, so a resize brings a diagram back as well.
 			if e.busy && (stale || (e.svg && e.target != target)) {
 				e.cancel.cancel();
 				e.ticket = VERSION.fetch_add(1, Ordering::Relaxed);
 				e.busy = false;
 				running -= 1;
 			}
-			if stale && e.info.error.is_some() {
+			if e.info.error.is_some() && (stale || resize) {
 				e.info.error = None;
 			}
 			if running < 4
@@ -702,6 +709,9 @@ impl Images {
 				Err(error) => {
 					e.pdf = None;
 					e.info.error = Some(error.to_string());
+					// The failed attempt counts as served, so the same
+					// request does not retry forever; a different one does.
+					e.raster = e.target;
 					self.resident.retain(|s, _| !e.aliases.contains(s));
 				}
 			}

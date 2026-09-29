@@ -1,0 +1,238 @@
+format_version = 2
+targets = ["ui"]
+version = 2
+
+[meta]
+name = "Cold White"
+description = "Cool white paper, carbon ink and vermilion accent, ported from the flowdeck cold palette"
+
+# Ported from the flowdeck `tokens-cold.css` palette and its `.md` rules.
+# Deviations from the source, all deliberate: `active_background` is one step
+# below `chip-hover-bg`, which the source does not define; the rem-based type
+# scale is dropped in favor of the shared heading scale; and `ok`, `warn` and
+# `shadow-card` have no slot in MVSS.
+
+[[fontdef]]
+id = "reading"
+lookfor = ["Iowan Old Style", "Palatino Linotype", "Songti SC", "STSong", "Georgia", "serif"]
+
+[[fontdef]]
+id = "code"
+lookfor = ["SF Mono", "Menlo", "Consolas", "monospace"]
+
+# Diagrams draw in the same slots as the page: the body background and ink,
+# the code surface and border, the table border and the muted marker color.
+# Every field is set so a lower-priority theme's table cannot bleed through.
+[mermaid]
+theme = "neutral"
+aspect_ratio = 1.6
+background = "#FEFEFF"
+text_color = "#393A3B"
+primary_color = "#EFF3F7"
+primary_text_color = "#393A3B"
+primary_border_color = "#DFE4E9"
+line_color = "#676A6D"
+secondary_color = "#EEF2F7"
+tertiary_color = "#FBFDFF"
+edge_label_background = "#FEFEFF"
+cluster_background = "#FBFDFF"
+cluster_border = "#CFD5DB"
+sequence_actor_fill = "#EFF3F7"
+sequence_actor_border = "#CFD5DB"
+sequence_actor_line = "#676A6D"
+sequence_note_fill = "#FBFDFF"
+sequence_note_border = "#CFD5DB"
+sequence_activation_fill = "#EEF2F7"
+sequence_activation_border = "#676A6D"
+git_commit_label_color = "#FEFEFF"
+git_commit_label_background = "#676A6D"
+git_tag_label_color = "#393A3B"
+git_tag_label_background = "#EEF2F7"
+git_tag_label_border = "#CFD5DB"
+pie_colors = [
+	"#B1413E", "#B2683C", "#9C8A40", "#73904A", "#4F8F62", "#458F80",
+	"#43808D", "#47709B", "#5E5F9B", "#7A5A94", "#94547F", "#9F5566",
+]
+pie_title_text_color = "#393A3B"
+pie_section_text_color = "#FEFEFF"
+pie_legend_text_color = "#393A3B"
+pie_stroke_color = "#FEFEFF"
+pie_outer_stroke_color = "#DFE4E9"
+
+[[rule]]
+when = ["body"]
+color = "#393A3B"
+background = "#FEFEFF"
+font = [{ family = "reading" }, { family = "serif[cjk]", weight = 500 }, { family = "serif[cjk]" }, { family = "emoji", weight = 400 }]
+
+[[rule]]
+when = ["link"]
+color = "#B1413E"
+
+[[rule]]
+when = ["link", "hover"]
+color = "#963633"
+
+[[rule]]
+when = ["em"]
+font = [
+	{ family = "reading", variant = "italic" },
+	{ family = "regularscript[cjk]" }, { family = "regularscript[cjk]", weight = 500 }, { family = "regularscript[cjk]", weight = 400 },
+	{ family = "serif[cjk]", variant = "italic", synthetic_italic = true, weight = 500 }, { family = "serif[cjk]", variant = "italic", synthetic_italic = true },
+	{ family = "emoji", weight = 400 },
+]
+
+[[rule]]
+when = ["h1"]
+font = [{ family = "reading" }, { family = "serif[cjk]", weight = 500 }, { family = "serif[cjk]" }, { family = "emoji", weight = 400 }]
+weight = 600
+color = "#1A1A1A"
+
+[[rule]]
+when = ["h2"]
+font = [{ family = "reading" }, { family = "serif[cjk]", weight = 500 }, { family = "serif[cjk]" }, { family = "emoji", weight = 400 }]
+weight = 600
+color = "#1A1A1A"
+
+[[rule]]
+when = ["h3"]
+font = [{ family = "reading" }, { family = "serif[cjk]", weight = 500 }, { family = "serif[cjk]" }, { family = "emoji", weight = 400 }]
+weight = 600
+color = "#1A1A1A"
+
+[[rule]]
+when = ["h4"]
+font = [{ family = "reading" }, { family = "serif[cjk]", weight = 500 }, { family = "serif[cjk]" }, { family = "emoji", weight = 400 }]
+weight = 600
+color = "#1A1A1A"
+
+[[rule]]
+when = ["h5"]
+font = [{ family = "reading" }, { family = "serif[cjk]", weight = 500 }, { family = "serif[cjk]" }, { family = "emoji", weight = 400 }]
+weight = 600
+color = "#1A1A1A"
+
+[[rule]]
+when = ["h6"]
+font = [{ family = "reading" }, { family = "serif[cjk]", weight = 500 }, { family = "serif[cjk]" }, { family = "emoji", weight = 400 }]
+weight = 600
+color = "#1A1A1A"
+
+[[rule]]
+when = ["code"]
+font = [{ family = "code" }, { family = "monospace[cjk]", weight = 500 }, { family = "monospace[cjk]" }, { family = "emoji", weight = 400 }]
+background = "#EFF3F7"
+
+[[rule]]
+when = ["code_block"]
+background = "#EFF3F7"
+border_edges = [1.0, 1.0, 1.0, 1.0]
+border_color = "#DFE4E9"
+radius = 8.0
+theme = "InspiredGitHub"
+
+[[rule]]
+when = ["code_block", "label"]
+color = "#676A6D"
+
+[[rule]]
+when = ["blockquote"]
+background = "#EEF2F7"
+border_color = "#B1413E"
+border_width = 3.0
+corner_radii = [0.0, 8.0, 8.0, 0.0]
+padding = [0.55, 0.8, 0.55, 1.0]
+
+[[rule]]
+when = ["details"]
+background = "#FBFDFF"
+border_color = "#CFD5DB"
+radius = 10.0
+
+[[rule]]
+when = ["summary"]
+color = "#393A3B"
+
+[[rule]]
+when = ["summary", "hover"]
+color = "#963633"
+
+[[rule]]
+when = ["marker"]
+color = "#676A6D"
+
+[[rule]]
+when = ["task_marker"]
+color = "#FEFEFF"
+background = "#FEFEFF"
+accent = "#B1413E"
+border_color = "#B1413E"
+radius = 3.0
+
+[[rule]]
+when = ["table", "cell"]
+border_color = "#CFD5DB"
+
+[[rule]]
+when = ["table", "header"]
+background = "#EEF2F7"
+color = "#676A6D"
+weight = 600
+
+[[rule]]
+when = ["hr"]
+color = "#DFE4E9"
+
+[[rule]]
+when = ["selection"]
+background = "#B1413E33"
+
+[[rule]]
+when = ["img"]
+border_color = "#CFD5DB"
+
+[[rule]]
+when = ["img", "caption"]
+color = "#676A6D"
+
+[[rule]]
+when = ["img", "placeholder"]
+color = "#676A6D"
+background = "#EFF3F7"
+
+[[rule]]
+when = ["scrollbar"]
+track = "#DFE4E9"
+thumb = "#676A6D"
+thumb_hover = "#B1413E"
+
+[[rule]]
+when = ["ui"]
+color = "#393A3B"
+background = "#F0F4F8"
+muted = "#676A6D"
+accent = "#B1413E"
+border_color = "#CFD5DB"
+error = "#A03230"
+shadow = "#1A1A1A38"
+scrim = "#1A1A1A70"
+
+[[rule]]
+when = ["ui", "panel"]
+background = "#FBFDFF"
+
+[[rule]]
+when = ["ui", "toolbar"]
+background = "#F0F4F8"
+
+[[rule]]
+when = ["ui", "statusbar"]
+background = "#F0F4F8"
+
+[[rule]]
+when = ["ui", "button"]
+background = "#EEF2F7"
+hover_background = "#E5E9EE"
+active_background = "#D9DEE4"
+disabled_color = "#676A6D"
+focus_color = "#B1413E"

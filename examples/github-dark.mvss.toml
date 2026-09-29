@@ -1,0 +1,240 @@
+format_version = 2
+targets = ["ui"]
+version = 2
+
+[meta]
+name = "GitHub Dark"
+description = "GitHub night canvas, blue accent and all-sans reading, ported from the flowdeck dark palette"
+
+# Ported from the flowdeck `tokens-github-dark.css` palette and its `.md` rules.
+# Deviations from the source, all deliberate: the source reuses the page color
+# for code, which would vanish on the canvas, so code takes the card surface;
+# `active_background` is one step below `chip-hover-bg`, which the source does
+# not define; the rem-based type scale is dropped in favor of the shared
+# heading scale; and `ok`, `warn`, `btn-primary`, `mark-*`, `key-ink`,
+# `fog-ink` and `shadow-card` have no slot in MVSS.
+
+[[fontdef]]
+id = "system"
+lookfor = ["PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", "Helvetica", "Arial", "sans-serif"]
+
+[[fontdef]]
+id = "code"
+lookfor = ["SF Mono", "SFMono-Regular", "Menlo", "Consolas", "monospace"]
+
+# Diagrams draw in the same slots as the page: the canvas, the raised code
+# surface, the border and muted inks of the GitHub palette. Every field is set
+# so a lower-priority theme's table cannot bleed through.
+[mermaid]
+theme = "dark"
+aspect_ratio = 1.6
+background = "#0D1117"
+text_color = "#E6EDF3"
+primary_color = "#161B22"
+primary_text_color = "#E6EDF3"
+primary_border_color = "#30363D"
+line_color = "#8B949E"
+secondary_color = "#21262D"
+tertiary_color = "#010409"
+edge_label_background = "#161B22"
+cluster_background = "#161B22"
+cluster_border = "#30363D"
+sequence_actor_fill = "#161B22"
+sequence_actor_border = "#30363D"
+sequence_actor_line = "#8B949E"
+sequence_note_fill = "#21262D"
+sequence_note_border = "#30363D"
+sequence_activation_fill = "#21262D"
+sequence_activation_border = "#8B949E"
+git_commit_label_color = "#0D1117"
+git_commit_label_background = "#8B949E"
+git_tag_label_color = "#E6EDF3"
+git_tag_label_background = "#21262D"
+git_tag_label_border = "#30363D"
+pie_colors = [
+	"#58A6FF", "#3FB950", "#D29922", "#F778BA", "#A371F7", "#39C5CF",
+	"#FF7B72", "#7EE787", "#E3B341", "#FF9BCE", "#DB61A2", "#79C0FF",
+]
+pie_title_text_color = "#E6EDF3"
+pie_section_text_color = "#0D1117"
+pie_legend_text_color = "#E6EDF3"
+pie_stroke_color = "#0D1117"
+pie_outer_stroke_color = "#30363D"
+
+[[rule]]
+when = ["body"]
+color = "#E6EDF3"
+background = "#0D1117"
+font = [{ family = "system" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
+
+[[rule]]
+when = ["link"]
+color = "#58A6FF"
+
+[[rule]]
+when = ["link", "hover"]
+color = "#79B8FF"
+
+[[rule]]
+when = ["em"]
+font = [
+	{ family = "system", variant = "italic" },
+	{ family = "sans-serif", variant = "italic" },
+	{ family = "sans-serif[cjk]", variant = "italic", synthetic_italic = true, weight = 500 }, { family = "sans-serif[cjk]", variant = "italic", synthetic_italic = true },
+	{ family = "emoji", weight = 400 },
+]
+
+[[rule]]
+when = ["h1"]
+font = [{ family = "system" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
+weight = 600
+color = "#F0F6FC"
+
+[[rule]]
+when = ["h2"]
+font = [{ family = "system" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
+weight = 600
+color = "#F0F6FC"
+
+[[rule]]
+when = ["h3"]
+font = [{ family = "system" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
+weight = 600
+color = "#F0F6FC"
+
+[[rule]]
+when = ["h4"]
+font = [{ family = "system" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
+weight = 600
+color = "#F0F6FC"
+
+[[rule]]
+when = ["h5"]
+font = [{ family = "system" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
+weight = 600
+color = "#F0F6FC"
+
+[[rule]]
+when = ["h6"]
+font = [{ family = "system" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
+weight = 600
+color = "#F0F6FC"
+
+[[rule]]
+when = ["code"]
+font = [{ family = "code" }, { family = "monospace[cjk]", weight = 500 }, { family = "monospace[cjk]" }, { family = "emoji", weight = 400 }]
+background = "#161B22"
+
+[[rule]]
+when = ["code_block"]
+background = "#161B22"
+border_edges = [1.0, 1.0, 1.0, 1.0]
+border_color = "#21262D"
+radius = 8.0
+theme = "base16-ocean.dark"
+
+[[rule]]
+when = ["code_block", "label"]
+color = "#8B949E"
+
+[[rule]]
+when = ["blockquote"]
+background = "#21262D"
+border_color = "#58A6FF"
+border_width = 3.0
+corner_radii = [0.0, 8.0, 8.0, 0.0]
+padding = [0.55, 0.8, 0.55, 1.0]
+
+[[rule]]
+when = ["details"]
+background = "#161B22"
+border_color = "#30363D"
+radius = 10.0
+
+[[rule]]
+when = ["summary"]
+color = "#E6EDF3"
+
+[[rule]]
+when = ["summary", "hover"]
+color = "#79B8FF"
+
+[[rule]]
+when = ["marker"]
+color = "#8B949E"
+
+[[rule]]
+when = ["task_marker"]
+color = "#0D1117"
+background = "#0D1117"
+accent = "#58A6FF"
+border_color = "#58A6FF"
+radius = 3.0
+
+[[rule]]
+when = ["table", "cell"]
+border_color = "#30363D"
+
+[[rule]]
+when = ["table", "header"]
+background = "#21262D"
+color = "#8B949E"
+weight = 600
+
+[[rule]]
+when = ["hr"]
+color = "#21262D"
+
+[[rule]]
+when = ["selection"]
+background = "#388BFD26"
+
+[[rule]]
+when = ["img"]
+border_color = "#30363D"
+
+[[rule]]
+when = ["img", "caption"]
+color = "#8B949E"
+
+[[rule]]
+when = ["img", "placeholder"]
+color = "#8B949E"
+background = "#161B22"
+
+[[rule]]
+when = ["scrollbar"]
+track = "#21262D"
+thumb = "#8B949E"
+thumb_hover = "#58A6FF"
+
+[[rule]]
+when = ["ui"]
+color = "#E6EDF3"
+background = "#010409"
+muted = "#8B949E"
+accent = "#58A6FF"
+border_color = "#30363D"
+error = "#F85149"
+shadow = "#00000066"
+scrim = "#01040999"
+
+[[rule]]
+when = ["ui", "panel"]
+background = "#161B22"
+
+[[rule]]
+when = ["ui", "toolbar"]
+background = "#010409"
+
+[[rule]]
+when = ["ui", "statusbar"]
+background = "#010409"
+
+[[rule]]
+when = ["ui", "button"]
+background = "#21262D"
+hover_background = "#1C2129"
+active_background = "#161B22"
+disabled_color = "#8B949E"
+focus_color = "#58A6FF"
