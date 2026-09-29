@@ -28,7 +28,9 @@ pub(crate) struct Services {
 }
 impl Services {
 	pub fn new(jobs: usize) -> Self {
-		let cpu = Arc::new(ThreadExecutor::new(Some(32 * 1024 * 1024)));
+		// The stack covers the deepest Mermaid recursion the diagram source
+		// cap allows; see `images::diagram`.
+		let cpu = Arc::new(ThreadExecutor::new(Some(128 * 1024 * 1024)));
 		let available = Arc::new(Notify::new());
 		let wake = available.clone();
 		let available_wake: markview_core::background::Wake =

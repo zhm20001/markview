@@ -532,7 +532,7 @@ fn a_new_diagram_theme_redraws_the_diagram() {
 
 #[test]
 fn a_diagram_failure_does_not_outlive_its_theme() {
-	// A text size far past the pixel limit makes the drawing fail.
+	// A raster past the pixel limit makes the drawing fail.
 	let doc = crate::document::parse(
 		"```mermaid\ngraph TD\n A[Start] --> B[End]\n```\n",
 	);
@@ -554,6 +554,20 @@ fn a_diagram_failure_does_not_outlive_its_theme() {
 		&huge,
 		&crate::test_support::fonts(),
 	);
+	// An unsized first raster clamps to the pixel cap, so the failure has to
+	// be asked for: 5000×5000 is past the 16-million-pixel limit. The first
+	// prepare resets the snapshot, so the demand goes out after it.
+	use markview_core::image::ImageDemand;
+	images.snapshot.pixels.publish_demand(
+		images.snapshot.generation,
+		HashMap::from([(
+			src.clone(),
+			ImageDemand {
+				size: (5000, 5000),
+				needs_pixels: true,
+			},
+		)]),
+	);
 	images.wait();
 	assert!(images.snapshot.entries[&src].error.is_some());
 	// The next theme draws a size that fits, and must get its own chance.
@@ -561,6 +575,16 @@ fn a_diagram_failure_does_not_outlive_its_theme() {
 		"format_version=2\nversion=1\n[mermaid]\ntheme='dark'",
 	)
 	.unwrap();
+	images.snapshot.pixels.publish_demand(
+		images.snapshot.generation,
+		HashMap::from([(
+			src.clone(),
+			ImageDemand {
+				size: (600, 400),
+				needs_pixels: true,
+			},
+		)]),
+	);
 	images.prepare(
 		&doc,
 		Path::new("note.md"),
@@ -668,6 +692,81 @@ fn broken_mermaid_diagram_becomes_an_error_placeholder() {
 	images.wait();
 	assert!(images.snapshot.entries[&specs[0].src].error.is_none());
 	assert!(images.snapshot.decoded().contains_key(&specs[0].src));
+}
+
+#[test]
+fn a_failed_diagram_raster_retries_once_per_requested_size() {
+	use anyhow::anyhow;
+	use markview_core::image::ImageDemand;
+	let doc = crate::document::parse("```mermaid\nflowchart TD\n A-->B\n```\n");
+	let mut specs = Vec::new();
+	for block in &doc.blocks {
+		block.images(&mut specs);
+	}
+	let src = specs[0].src.clone();
+	let mut images = images(true);
+	// The real job's completion arrives on the replaced channel's other end
+	// is dropped, so every completion here is injected by hand.
+	let (send, recv) = mpsc::channel();
+	images.recv = recv;
+	images.prepare(
+		&doc,
+		Path::new("note.md"),
+		1,
+		false,
+		&Stylesheet::default(),
+		&FontConfig::default(),
+	);
+	let inject =
+		|images: &mut Images, send: &mpsc::Sender<Finished>, target| {
+			// The failure records the entry's own requested size, so the
+			// injection sets it the way a real job's entry would carry.
+			let source = images.entries.keys().next().unwrap().clone();
+			let entry = images.entries.values_mut().next().unwrap();
+			entry.target = target;
+			let ticket = entry.ticket;
+			send.send(Finished {
+				source,
+				generation: images.generation,
+				ticket,
+				result: Err(anyhow!("Image exceeds 16 million pixels")),
+			})
+			.unwrap();
+			images.poll();
+		};
+	// The first failure stands until a different size is requested…
+	inject(&mut images, &send, None);
+	assert!(images.snapshot.entries[&src].error.is_some());
+	let busy = |images: &Images| images.entries.values().next().unwrap().busy;
+	images.snapshot.pixels.publish_demand(
+		images.snapshot.generation,
+		HashMap::from([(
+			src.clone(),
+			ImageDemand {
+				size: (500, 500),
+				needs_pixels: true,
+			},
+		)]),
+	);
+	images.poll();
+	assert!(busy(&images));
+	// …and the size that just failed does not retry forever.
+	inject(&mut images, &send, Some((500, 500)));
+	assert!(!busy(&images));
+	assert!(images.snapshot.entries[&src].error.is_some());
+	// A new size clears the error and schedules again.
+	images.snapshot.pixels.publish_demand(
+		images.snapshot.generation,
+		HashMap::from([(
+			src,
+			ImageDemand {
+				size: (640, 480),
+				needs_pixels: true,
+			},
+		)]),
+	);
+	images.poll();
+	assert!(busy(&images));
 }
 
 #[test]

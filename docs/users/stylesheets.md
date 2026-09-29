@@ -59,6 +59,8 @@ The export panel shares paper layout and stylesheet selection between PDF and PN
 
 The `8-bit` theme uses Fusion Pixel 12px Monospaced (Simplified Chinese, Traditional Chinese and Japanese variants) throughout the document and UI, including headings, emphasis and code. Download its fonts from the Fonts panel or with `markview fonts download --style 8-bit`. Missing pixel fonts fall back to system monospace fonts. Emphasis uses an underline and strong text uses brighter phosphor, preserving the regular pixel face. Math retains its mathematical fonts.
 
+The `cold-white`, `warm-paper` and `github-dark` themes in [`examples/`](../examples/) port the flowdeck palette family: three sibling files with the same slots, installed one by one with `markview ss install`. The two light themes share one serif reading stack and differ only in palette; `github-dark` reads all-sans on the GitHub night canvas.
+
 ### PDF themes
 
 All paper themes use `targets = ["pdf"]` and appear in the export selector. They keep white paper and inherit Print's font fallbacks and 0.75em page furniture. The three artist themes use A4 document layouts: A4 paper, 18/20/22/20 mm top/right/bottom/left margins, and empty header and footer text slots. Their colored header rules remain; `print` retains its centered page count and empty header.
@@ -394,6 +396,7 @@ The keys are SVG generic names. Values are ordered literal family names or `font
 ```toml
 [mermaid]
 theme = "dark"              # default, dark, forest, neutral, or modern
+aspect_ratio = 1.6          # the width-over-height shape the layout aims for
 font_family = ["reading"]   # fontdef ids or literal families, in priority order
 background = "#202630"      # the diagram's own paper
 primary_color = "#2B3441"
@@ -404,6 +407,8 @@ line_color = "#A5B3C5"
 `theme` names a built-in palette and decides every field the table leaves out, so a theme that only sets `background` keeps the preset's nodes, edges and text; a stylesheet with no table at all keeps the renderer's light default. Every other field is the renderer's, one for one: `font_family`, `font_size`, `background`, `text_color`, `primary_color`, `primary_text_color`, `primary_border_color`, `line_color`, `secondary_color`, `tertiary_color`, `edge_label_background`, `cluster_background`, `cluster_border`, `sequence_actor_fill`, `sequence_actor_border`, `sequence_actor_line`, `sequence_note_fill`, `sequence_note_border`, `sequence_activation_fill`, `sequence_activation_border`, `git_commit_label_color`, `git_commit_label_background`, `git_tag_label_color`, `git_tag_label_background`, `git_tag_label_border`, `pie_title_text_color`, `pie_section_text_color`, `pie_legend_text_color`, `pie_stroke_color`, `pie_outer_stroke_color`, `pie_title_text_size`, `pie_section_text_size`, `pie_legend_text_size`, `pie_stroke_width`, `pie_outer_stroke_width` and `pie_opacity`. The `git_colors`, `git_inv_colors` and `git_branch_label_colors` palettes take eight colors each and `pie_colors` takes twelve; each one replaces a whole derived palette instead of adjusting it.
 
 `font_family` is an array in priority order, and a name that matches a `fontdef` id means that definition's families—exactly as it does in a rule's `font`—so a theme can write `font_family = ["reading", "emoji"]`. Any other name is a literal family. To see which family a diagram really used, put `一` in a label: a sans-serif face ends the stroke as a rectangle, while a serif face adds a small triangle at its right end.
+
+`aspect_ratio` shapes the layout instead of coloring it. Without it, a flowchart's shape is whatever the layout engine's own algorithm produces, and the same source can lay out wide in one renderer and tall in another. With it, the layout stretches spacing toward the goal, and an over-wide horizontal flow wraps its ranks into serpentine bands the way text wraps into lines. A goal of `1.6` suits a reading column. A dense diagram the goal breaks still draws with its natural shape. Either way the drawing is only scaled down to the column, never up, so a wider picture shows smaller text: pair the goal with a look at the full-size picture.
 
 A label is measured and drawn with the same faces: the theme's list draws what it covers, and a cluster it cannot draw falls back to the body text's Han faces—whichever faces its `font` candidates select for the reader's CJK convention—so a Chinese label comes out in the reader's own regional face rather than in whatever the system would fall back to. Latin labels keep the theme's own faces. Mermaid only materializes these configured candidates, the SVG generic candidates, and the selected CJK fallback candidates; it does not load every installed system face.
 

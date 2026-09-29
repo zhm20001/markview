@@ -162,8 +162,23 @@ pub(super) fn decode(
 		let tree = resvg::usvg::Tree::from_data(bytes, &options)
 			.context("Unsupported or invalid image/SVG")?;
 		let intrinsic = tree.size().to_int_size();
-		dimensions(intrinsic.width(), intrinsic.height())?;
-		let (w, h) = target.unwrap_or((intrinsic.width(), intrinsic.height()));
+		let (mut w, mut h) =
+			target.unwrap_or((intrinsic.width(), intrinsic.height()));
+		if target.is_none() {
+			// An unsized raster targets the intrinsic size, so a drawing past
+			// the pixel cap rasters at the largest size that fits it instead
+			// of failing: the layout still learns the true intrinsic size and
+			// displays the drawing downscaled either way.
+			let scale =
+				(MAX_PIXELS as f32 / (w as f32 * h as f32).max(1.)).sqrt();
+			if scale < 1. {
+				w = ((w as f32 * scale) as u32).max(1);
+				h = ((h as f32 * scale) as u32).max(1);
+			}
+		}
+		// Only the raster's own size is bounded: a huge intrinsic drawing is
+		// legal while the page displays it downscaled, and layout learns the
+		// intrinsic size from `Decoded` either way.
 		dimensions(w, h)?;
 		let mut pixmap = resvg::tiny_skia::Pixmap::new(w, h)
 			.context("Cannot allocate SVG")?;

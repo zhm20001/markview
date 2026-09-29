@@ -1217,6 +1217,11 @@ impl PageStyle {
 pub struct MermaidStyle {
 	/// Built-in preset: `default`, `dark`, `forest`, `neutral` or `modern`.
 	pub theme: Option<String>,
+	/// The width-over-height ratio the layout of a flowchart aims for. The
+	/// renderer stretches spacing, and folds an over-wide horizontal flow
+	/// into serpentine bands, to move toward it; `None` keeps the engine's
+	/// own natural shape.
+	pub aspect_ratio: Option<f32>,
 	/// Families in priority order. A name that matches a `fontdef` id is that
 	/// definition's families, exactly as in a rule's `font`; any other name is
 	/// a literal family.
@@ -1278,6 +1283,7 @@ impl MermaidStyle {
 		macro_rules! merge { ($($f:ident),*) => { $(if higher.$f.is_some(){self.$f=higher.$f.clone();})* }; }
 		merge!(
 			theme,
+			aspect_ratio,
 			font_family,
 			font_size,
 			primary_color,
@@ -1347,6 +1353,7 @@ impl MermaidStyle {
 			}
 		}
 		for (field, value) in [
+			("aspect_ratio", self.aspect_ratio),
 			("font_size", self.font_size),
 			("pie_title_text_size", self.pie_title_text_size),
 			("pie_section_text_size", self.pie_section_text_size),
