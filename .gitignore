@@ -29,3 +29,6 @@ web/.tsbuildinfo
 
 # Vendored tools
 .tools/
+
+.scratch/
+.DS_Store
