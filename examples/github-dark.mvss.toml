@@ -14,13 +14,17 @@ description = "GitHub night canvas, blue accent and all-sans reading, ported fro
 # heading scale; and `ok`, `warn`, `btn-primary`, `mark-*`, `key-ink`,
 # `fog-ink` and `shadow-card` have no slot in MVSS.
 
-[[fontdef]]
-id = "system"
-lookfor = ["PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", "Helvetica", "Arial", "sans-serif"]
-
-[[fontdef]]
-id = "code"
-lookfor = ["SF Mono", "SFMono-Regular", "Menlo", "Consolas", "monospace"]
+# Theme-specific fonts, commented out so the `font` stacks below resolve the
+# builtin `sans-serif`/`monospace` fontdefs, which the in-app font picker can
+# override. To take the theme fonts back, uncomment these and point the
+# `font` stacks at `system`/`code` again.
+# [[fontdef]]
+# id = "system"
+# lookfor = ["PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", "Helvetica", "Arial", "sans-serif"]
+#
+# [[fontdef]]
+# id = "code"
+# lookfor = ["SF Mono", "SFMono-Regular", "Menlo", "Consolas", "monospace"]
 
 # Diagrams draw in the same slots as the page: the canvas, the raised code
 # surface, the border and muted inks of the GitHub palette. Every field is set
@@ -65,7 +69,7 @@ pie_outer_stroke_color = "#30363D"
 when = ["body"]
 color = "#E6EDF3"
 background = "#0D1117"
-font = [{ family = "system" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
+font = [{ family = "sans-serif" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
 
 [[rule]]
 when = ["link"]
@@ -78,7 +82,6 @@ color = "#79B8FF"
 [[rule]]
 when = ["em"]
 font = [
-	{ family = "system", variant = "italic" },
 	{ family = "sans-serif", variant = "italic" },
 	{ family = "sans-serif[cjk]", variant = "italic", synthetic_italic = true, weight = 500 }, { family = "sans-serif[cjk]", variant = "italic", synthetic_italic = true },
 	{ family = "emoji", weight = 400 },
@@ -86,43 +89,43 @@ font = [
 
 [[rule]]
 when = ["h1"]
-font = [{ family = "system" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
+font = [{ family = "sans-serif" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
 weight = 600
 color = "#F0F6FC"
 
 [[rule]]
 when = ["h2"]
-font = [{ family = "system" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
+font = [{ family = "sans-serif" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
 weight = 600
 color = "#F0F6FC"
 
 [[rule]]
 when = ["h3"]
-font = [{ family = "system" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
+font = [{ family = "sans-serif" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
 weight = 600
 color = "#F0F6FC"
 
 [[rule]]
 when = ["h4"]
-font = [{ family = "system" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
+font = [{ family = "sans-serif" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
 weight = 600
 color = "#F0F6FC"
 
 [[rule]]
 when = ["h5"]
-font = [{ family = "system" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
+font = [{ family = "sans-serif" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
 weight = 600
 color = "#F0F6FC"
 
 [[rule]]
 when = ["h6"]
-font = [{ family = "system" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
+font = [{ family = "sans-serif" }, { family = "sans-serif[cjk]", weight = 500 }, { family = "sans-serif[cjk]" }, { family = "emoji", weight = 400 }]
 weight = 600
 color = "#F0F6FC"
 
 [[rule]]
 when = ["code"]
-font = [{ family = "code" }, { family = "monospace[cjk]", weight = 500 }, { family = "monospace[cjk]" }, { family = "emoji", weight = 400 }]
+font = [{ family = "monospace" }, { family = "monospace[cjk]", weight = 500 }, { family = "monospace[cjk]" }, { family = "emoji", weight = 400 }]
 background = "#161B22"
 
 [[rule]]
