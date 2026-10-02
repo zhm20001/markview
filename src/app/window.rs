@@ -600,7 +600,11 @@ impl<P: super::SendEvent> App<P> {
 								self.action(Command::Outline)
 							}
 							"o" if !self.panel_has_focus() => {
-								self.action(Command::Open)
+								if self.interaction.modifiers.shift_key() {
+									self.action(Command::RevealFolder)
+								} else {
+									self.action(Command::Open)
+								}
 							}
 							"t" => self.action(Command::Styles),
 							"e" => self.action(Command::Export),

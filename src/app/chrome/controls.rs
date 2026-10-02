@@ -264,6 +264,7 @@ pub(super) fn toolbar_controls(
 	lang: Lang,
 ) -> Vec<Button> {
 	[
+		(icons::REVEAL, lang.toolbar_reveal(), Command::RevealFolder),
 		(icons::OPEN, lang.toolbar_open(), Command::Open),
 		(icons::EXPORT, lang.toolbar_export(), Command::Export),
 		(icons::SETTINGS, lang.toolbar_settings(), Command::Settings),
@@ -290,7 +291,7 @@ pub(super) fn toolbar_controls(
 	.collect()
 }
 pub(super) fn toolbar_right_edge(width: f32) -> f32 {
-	width - 4.0 * ICON_BUTTON - 3.0 * GAP - 16.0
+	width - 5.0 * ICON_BUTTON - 4.0 * GAP - 16.0
 }
 pub(super) fn settings_form(
 	ui: &mut TextShaper,

@@ -76,6 +76,7 @@ fn controls_fit_minimum_window_and_panel_focus_has_no_document_actions() {
 		assert_eq!(
 			toolbar.iter().map(|b| b.action).collect::<Vec<_>>(),
 			vec![
+				Command::RevealFolder,
 				Command::Open,
 				Command::Export,
 				Command::Settings,
@@ -223,6 +224,7 @@ fn the_toolbar_and_panel_close_buttons_carry_icons() {
 fn compiled_icons_stay_inside_the_unit_box() {
 	for icon in [
 		icons::OPEN,
+		icons::REVEAL,
 		icons::EXPORT,
 		icons::DOWNLOAD,
 		icons::REDOWNLOAD,
