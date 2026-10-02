@@ -21,6 +21,10 @@ at the same level, without `[brackets]`.
 
 ## Unreleased
 
+### Added
+
+- Add a "Reveal" toolbar button and <kbd>Cmd+Shift+O</kbd> that show the active document's folder in the file manager; the Open button becomes a file-plus icon.
+
 ### Fixed
 
 - Preserve symlinked settings resources and fade loading/error feedback when previewing the document.

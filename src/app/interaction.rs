@@ -446,6 +446,28 @@ impl<P: super::SendEvent> App<P> {
 				});
 				return;
 			}
+			Command::RevealFolder => {
+				let dir = self
+					.readers
+					.session
+					.path
+					.as_deref()
+					.and_then(std::path::Path::parent)
+					.filter(|dir| dir.is_dir());
+				match dir {
+					Some(dir) => {
+						let _ = open::that_detached(dir);
+					}
+					None => {
+						self.notify(
+							self.preferences.values.lang().status_open_first(),
+							true,
+							4,
+						);
+					}
+				}
+				return;
+			}
 			Command::Smaller => {
 				self.preferences.values.font_size =
 					(self.preferences.values.font_size - 1.0).max(10.0)
