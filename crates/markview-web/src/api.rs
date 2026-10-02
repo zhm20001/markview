@@ -6,13 +6,16 @@
 
 use crate::{
 	fonts,
+	images::Images,
 	selection::{Pointer, Reading},
 	state::{Published, SelectionLength},
 };
 use markview_core::{
 	document::{Document, parse},
-	image::ImageSnapshot,
+	fonts::FontConfig,
+	image::Pixels,
 	layout::{LayoutEngine, LayoutOptions, ProgressiveLayout, Viewport},
+	scene::Rect,
 	style::Stylesheet,
 };
 use markview_render::{FrameStatus, Renderer, SurfaceSource, Theme, View};
@@ -47,6 +50,20 @@ const MAX_DPR: f32 = 8.0;
 /// The longest layout budget one `stepUpdate` call may be asked for.
 const MAX_STEP_MS: f64 = 60_000.0;
 
+/// Installs host font bytes for subsequently created readers.
+#[wasm_bindgen(js_name = configureFonts)]
+pub fn configure_fonts(faces: js_sys::Array) -> Result<(), JsValue> {
+	let faces = faces
+		.iter()
+		.map(|face| {
+			face.dyn_into::<js_sys::Uint8Array>()
+				.map(|data| data.to_vec())
+				.map_err(|_| fail("host fonts must be Uint8Array values"))
+		})
+		.collect::<Result<Vec<_>, _>>()?;
+	fonts::install(faces).map_err(fail)
+}
+
 /// Builds a handle that draws into `canvas`, importing `config_json` when the
 /// page passes one.
 #[wasm_bindgen]
@@ -56,6 +73,7 @@ pub async fn create(
 ) -> Result<Markview, JsValue> {
 	console_error_panic_hook::set_once();
 	let config = Config::parse(config_json.as_deref())?;
+	let fonts = fonts::config();
 	let dpr = ratio(web_sys::window().map_or(1.0, |w| w.device_pixel_ratio()));
 	// The page may not have sized the canvas yet, so start from its CSS box
 	// when there is one and let `resize` keep it current afterwards.
@@ -81,7 +99,7 @@ pub async fn create(
 	let scale = effective_scale(logical, dpr, limit);
 	let (width, height) = size_canvas(&canvas, logical, scale, limit);
 	renderer.resize(width, height);
-	let mut options = config.options();
+	let mut options = config.options(fonts);
 	options.width = column_width(config.width, logical.0);
 	let document = Arc::new(parse(""));
 	Ok(Markview {
@@ -95,6 +113,8 @@ pub async fn create(
 		published_document: document.clone(),
 		document,
 		pending: None,
+		images: Images::default(),
+		images_dirty: false,
 		cursor: None,
 		logical,
 		dpr,
@@ -131,6 +151,8 @@ pub struct Markview {
 	published_document: Arc<Document>,
 	/// The document `begin_update` parsed, until its layout completes.
 	pending: Option<Pending>,
+	images: Images,
+	images_dirty: bool,
 	/// The last canvas-local point the page reported, in CSS pixels.
 	cursor: Option<(f32, f32)>,
 	/// The canvas box in CSS pixels, which hit testing and scrolling use.
@@ -160,12 +182,94 @@ pub struct Markview {
 
 #[wasm_bindgen]
 impl Markview {
+	/// Every source in the newest document, including unpublished blocks.
+	#[wasm_bindgen(js_name = imageSources)]
+	pub fn image_sources(&self) -> String {
+		serde_json::json!({
+			"generation": self.images.snapshot.generation.to_string(),
+			"sources": self.images.sources,
+		})
+		.to_string()
+	}
+
+	/// Accepts host pixels; the next flush starts one reflow for the batch.
+	#[wasm_bindgen(js_name = resolveImage)]
+	pub fn resolve_image(
+		&mut self,
+		generation: &str,
+		src: &str,
+		width: u32,
+		height: u32,
+		rgba: Vec<u8>,
+	) {
+		self.images_dirty |= self.images.complete(
+			generation,
+			src,
+			Ok(Pixels {
+				width,
+				height,
+				rgba: Arc::from(rgba),
+			}),
+			self.renderer.max_texture_dimension_2d(),
+		);
+	}
+
+	#[wasm_bindgen(js_name = rejectImage)]
+	pub fn reject_image(
+		&mut self,
+		generation: &str,
+		src: &str,
+		message: String,
+	) {
+		self.images_dirty |= self.images.complete(
+			generation,
+			src,
+			Err(message),
+			self.renderer.max_texture_dimension_2d(),
+		);
+	}
+
+	#[wasm_bindgen(js_name = flushImages)]
+	pub fn flush_images(&mut self) -> bool {
+		if !std::mem::take(&mut self.images_dirty) {
+			return false;
+		}
+		self.reflow();
+		true
+	}
+
+	/// Geometry from the newest pass, never from a retired document.
+	#[wasm_bindgen(js_name = imagePriorities)]
+	pub fn image_priorities(&mut self) -> String {
+		let viewport = Rect {
+			x: -self.left(),
+			y: self.visible_scroll(),
+			w: self.logical.0,
+			h: (self.logical.1 - 2. * INSET).max(0.),
+		};
+		let (snapshot, pass) = if let Some(pending) = &self.pending {
+			(pending.layout.snapshot(), Some(pending.layout.pass_id()))
+		} else {
+			(&self.published.snapshot, self.published.pass)
+		};
+		serde_json::to_string(&self.images.priorities(
+			snapshot,
+			pass,
+			self.published.revision,
+			viewport,
+			&self.horizontal,
+		))
+		.unwrap()
+	}
+
 	/// Full replace: parses, lays out and publishes.
 	#[wasm_bindgen(js_name = setMarkdown)]
 	pub fn set_markdown(&mut self, text: String) -> String {
 		let started = Instant::now();
 		self.reset_document_interaction();
 		self.document = Arc::new(parse(text));
+		self.images.prepare(&self.document);
+		self.images_dirty = false;
 		self.pending = None;
 		self.parse_ms = started.elapsed().as_secs_f64() * 1000.0;
 		let laid = Instant::now();
@@ -181,11 +285,12 @@ impl Markview {
 		let started = Instant::now();
 		self.reset_document_interaction();
 		let document = Arc::new(parse(text));
+		self.images.prepare(&document);
+		self.images_dirty = false;
 		self.parse_ms = started.elapsed().as_secs_f64() * 1000.0;
 		self.layout_ms = 0.0;
-		let images = ImageSnapshot::default();
-		let layout =
-			self.engine.begin_layout(&document, &self.options, &images);
+		let images = &self.images.snapshot;
+		let layout = self.engine.begin_layout(&document, &self.options, images);
 		self.pending = Some(Pending {
 			parsed: Some(document),
 			layout,
@@ -330,10 +435,10 @@ impl Markview {
 			// Keep the newest text rather than the last fully accepted one.
 			self.document = parsed;
 		}
-		let images = ImageSnapshot::default();
+		let images = &self.images.snapshot;
 		let layout =
 			self.engine
-				.begin_layout(&self.document, &self.options, &images);
+				.begin_layout(&self.document, &self.options, images);
 		self.pending = Some(Pending {
 			parsed: None,
 			layout,
@@ -642,7 +747,7 @@ impl Markview {
 	) -> Result<(), JsValue> {
 		let config = Config::parse(config_json.as_deref())?;
 		let details_open = self.options.details_open.clone();
-		self.options = config.options();
+		self.options = config.options(self.options.fonts.clone());
 		self.options.details_open = details_open;
 		self.horizontal.clear();
 		self.overflow_drag = None;
@@ -913,9 +1018,11 @@ impl Markview {
 			pointer,
 			document,
 			published_document,
+			images,
 			..
 		} = self;
-		let snapshot = engine.layout(document, options);
+		let snapshot =
+			engine.layout_with_images(document, options, &images.snapshot);
 		*published_document = document.clone();
 		// A full layout is not a prefix of anything, so no pass may extend it.
 		published.accept(snapshot, document.source.clone(), None, pointer);
@@ -960,7 +1067,12 @@ impl Markview {
 				self.published.extend(prefix, &mut self.pointer);
 				// `extend` only re-stamps the selection, which reads the same
 				// text, so the cached character count still holds here.
-			} else if prefix.height >= self.scrolling.offset {
+			} else if prefix.height >= self.scrolling.offset
+				&& self.published.covers_interaction(
+					&document.source,
+					prefix,
+					&self.pointer,
+				) {
 				// A different document, or the same one laid out for another
 				// column, replaces what is on screen. Until its prefix has
 				// grown back past the top of the current view, replacing would
@@ -1109,7 +1221,7 @@ impl Config {
 		}
 	}
 
-	fn options(&self) -> LayoutOptions {
+	fn options(&self, fonts: FontConfig) -> LayoutOptions {
 		LayoutOptions {
 			width: finite(self.width, 760.0).clamp(1.0, MAX_LOGICAL),
 			font_size: finite(self.font_size, 18.0).clamp(1.0, 200.0),
@@ -1120,7 +1232,7 @@ impl Config {
 			hide_front_matter: self.hide_front_matter,
 			front_matter_label: self.front_matter_label.clone(),
 			stylesheet: Stylesheet::bundled(self.theme == ThemeConfig::Dark),
-			fonts: fonts::config(),
+			fonts,
 			..LayoutOptions::default()
 		}
 	}

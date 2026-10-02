@@ -250,3 +250,8 @@ search_word = "Word"
 search_preparing = "Preparing…"
 search_previous = "Previous match"
 search_next = "Next match"
+
+panel_loading = "Loading…"
+panel_refreshing = "Refreshing…"
+panel_load_failed = "Unable to load: {error}"
+panel_retry = "Retry"

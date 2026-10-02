@@ -4,6 +4,7 @@
 
 import { CanvasReader, init } from "@markview/web";
 import type { Markview, MarkviewOptions, MarkviewStats } from "@markview/web";
+import { fonts } from "./fonts.js";
 
 const DEBOUNCE_MS = 120;
 const NOTICE_MS = 2200;
@@ -184,7 +185,7 @@ async function boot(): Promise<void> {
 	try {
 		dom.engine.dataset.state = "loading";
 		config = readConfig();
-		await init();
+		await init({ fonts });
 
 		let ready = false;
 		const reader = await CanvasReader.attach(dom.canvas, {

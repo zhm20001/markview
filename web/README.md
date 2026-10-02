@@ -43,7 +43,7 @@ files the `application/wasm` MIME type the WebAssembly fetch requires.
 
 ## Test
 
-The Playwright acceptance suite (40 checks) drives engine startup, rendering,
+The Playwright acceptance suite drives engine startup, rendering,
 selection, copy, incremental re-layout, the resumable layout API, the reader's
 lifecycle, reflow on a narrower canvas and the scroll range against the built
 demo in `web/dist/`:
@@ -70,7 +70,7 @@ The reusable component. Call `init()` once, then use the surface:
 
 ```js
 import init, { Markview, CanvasReader } from "@markview/web";
-await init();
+await init({ fonts: ["/fonts/NotoSerif-Regular.otf", "/fonts/NotoSans-Regular.otf"] });
 
 // Low level: full control of the handle.
 const mv = await Markview.create(canvas, { fontSize: 19 });
@@ -126,7 +126,7 @@ window.MV_CONFIG = { fontSize: 20, theme: "dark" };
 
 - No tabs, settings UI or font management: the demo is a single document.
 - Configuration is injected from JavaScript only — there is no file IO.
-- Only the bundled subset faces (embedded by `crates/markview-web/src/fonts.rs`)
+- Only the pinned subset faces (host assets imported by `apps/demo/src/fonts.ts`)
   ship with the demo, so exotic scripts may render as tofu. Check any
   document's coverage with `python3 scripts/check_web_font_coverage.py [document]`.
   That check unions every bundled face, so a character only one face carries is
@@ -146,3 +146,90 @@ Hosts can pass `scrollMode`, `onLink` and `onImage` to `CanvasReader.attach`.
 Direct integrations can use `scrollInput`, `cursor`, `pointerLeave`,
 `cancelPointer` and the activation returned by `pointerUp`; see the contract
 for the types and motion ownership semantics.
+
+## Host fonts
+
+The wasm binary embeds only KaTeX's math fonts. Hosts supply text fonts through
+`init({ fonts })` before creating any `Markview` or `CanvasReader`:
+
+```ts
+import init, { type FontSource } from "@markview/web";
+
+const fonts: FontSource[] = [
+  "/fonts/NotoSerif-Regular.otf",
+  new URL("./fonts/NotoSerif-Bold.otf", import.meta.url),
+  fontArrayBuffer,
+  fontUint8Array,
+];
+await init({ fonts });
+```
+
+URL sources are fetched in parallel with wasm initialization. Byte sources
+are copied into wasm, preserving a `Uint8Array` view's offset and length.
+OpenType (`.otf`), TrueType (`.ttf`) and font collections (`.ttc`/`.otc`) are
+supported; WOFF/WOFF2 and CSS `@font-face` fonts are not used by the engine.
+HTTP failures and invalid font files reject initialization; callers can retry
+with corrected sources. Concurrent and later `init()` calls share the first
+successful initialization's options and fonts, so every reader reuses the
+same collection. Omitting `fonts` makes no text fonts available.
+Supply at least one text face for paragraph metrics, including math placement.
+
+Supply regular, bold, italic and script fallback faces as needed. Family
+names are read from the files; the bundled stylesheet looks for Noto Serif,
+Noto Sans, Noto Sans Mono and their CJK variants, among other families.
+
+The demo imports its 16 pinned subset faces in `apps/demo/src/fonts.ts`.
+esbuild's `file` loaders emit them as `assets/[name]-[hash].otf`/`.ttf`, and
+the demo hands those URLs to `init`. The reusable package ships no text fonts.
+Deploy the generated `assets/` directory along with the demo's JavaScript
+and wasm binary.
+
+## Host-managed asynchronous images
+
+Image loading is opt-in and separate from typography options. Supply
+`resources` to `CanvasReader.attach`, or the third argument to `Markview.create`:
+
+```ts
+import { CanvasReader, loadImageUrl } from "@markview/web";
+
+const reader = await CanvasReader.attach(canvas, {
+  markdown: "![Example](images/example.png)",
+  resources: {
+    onResources(events) {
+      for (const event of events) {
+        if (event.kind === "request") void loadImageUrl(event.request);
+      }
+    },
+  },
+});
+```
+
+The callback receives all deduplicated image requests in a microtask, including
+images outside the viewport and in closed details. A request exposes `src`, a
+unique `id`, `signal`, current `priority`, and `resolve(pixels)` / `reject(message)`.
+A custom host can queue requests, fetch authenticated bytes, then call
+`request.resolve(await decodeImage(bytes, request.signal))`. Catch asynchronous
+failures and call `reject`; the callback's return value is ignored.
+
+`priority` events report changes among `visible`, `near`, `offscreen`, and
+`unknown`, with vertical distance in CSS pixels. The host owns concurrency,
+throttling and caching. No resources are fetched when no callback is supplied.
+The URL helper accepts `{ baseUrl, requestInit }`, obeys browser CORS, and
+supports HTTP(S), Blob and `data:image/` URLs. Browser decoding displays one
+static frame and determines format support.
+`decodeImage` infers the SVG MIME type for bytes and untyped Blobs, including
+typed-array views that contain only part of a larger buffer.
+
+Pixels use `{ width, height, rgba: Uint8Array }` in straight-alpha sRGB RGBA8.
+They are copied on completion and published in batches through progressive
+reflow. Low-level hosts drive `stepPending()` and `frame()` after completion;
+`CanvasReader` already does this. An image reflow supersedes a `LayoutUpdate`,
+so that handle becomes stale. Layout completion does not wait for images, and
+`stats.pending` remains a layout counter.
+
+Resize and option changes retain requests. Replacing Markdown or destroying
+the component aborts their signals; late and duplicate results are ignored.
+Failures remain error placeholders until the document is replaced. Recoverable
+callback errors use `resources.onError`, then the reader's `onError`, or the
+console. Text fonts still load through `init({ fonts })`; Mermaid integration
+is separate from external resource loading.

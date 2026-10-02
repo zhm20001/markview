@@ -20,6 +20,33 @@ pub(crate) struct Published {
 	pub(crate) pass: Option<u64>,
 }
 impl Published {
+	/// A same-document prefix must cover the selection and held drag base
+	/// before replacement can rebase them onto it.
+	pub(crate) fn covers_interaction(
+		&self,
+		source: &Arc<str>,
+		prefix: &LayoutSnapshot,
+		pointer: &Pointer,
+	) -> bool {
+		if !self
+			.source
+			.as_ref()
+			.is_some_and(|old| Arc::ptr_eq(old, source))
+		{
+			return true;
+		}
+		[
+			pointer.selection(),
+			pointer.drag().and_then(|drag| drag.base),
+		]
+		.into_iter()
+		.flatten()
+		.all(|selection| {
+			selection.anchor.block.max(selection.focus.block)
+				< prefix.blocks.len()
+		})
+	}
+
 	/// Accepts `next` as a whole new snapshot, moving the selection onto it
 	/// while it still reads the same text and clearing it otherwise. `pass` is
 	/// the resumable pass that produced it, or `None` for a snapshot no pass

@@ -21,6 +21,7 @@ pub(crate) use markview_selection::{
 };
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Command {
+	RetrySettingsLoad,
 	SearchCase,
 	SearchWord,
 	SearchPrevious,
@@ -212,16 +213,6 @@ pub(crate) enum PanelTab {
 	Styles,
 	Fonts,
 	About,
-}
-
-impl PanelTab {
-	/// Whether showing this page refreshes the downloadable-font catalogue.
-	///
-	/// Building the catalogue reads the whole system font collection, so the
-	/// Generic page leaves it alone and a launch never pays for it.
-	pub(crate) fn shows_font_catalog(self) -> bool {
-		matches!(self, PanelTab::Styles | PanelTab::Fonts)
-	}
 }
 
 /// A blocking question awaiting the reader's answer.

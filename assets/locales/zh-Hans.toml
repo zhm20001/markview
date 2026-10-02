@@ -248,3 +248,8 @@ search_word = "整词"
 search_preparing = "准备中…"
 search_previous = "上一项"
 search_next = "下一项"
+
+panel_loading = "加载中…"
+panel_refreshing = "刷新中…"
+panel_load_failed = "加载失败：{error}"
+panel_retry = "重试"

@@ -35,6 +35,6 @@ mkdir -p "$out"
 	--out-name markview_web \
 	target/wasm32-unknown-unknown/release/markview_web.wasm
 
-# The TypeScript package imports the raw binary as a bundler asset, so the
-# `.wasm` keeps its name and the glue's own default path is never used.
+# The TypeScript package copies the binary beside its JavaScript under the
+# plain name `init()` resolves; text fonts are separate host assets.
 echo "built $out/markview_web.js ($(du -h "$out/markview_web_bg.wasm" | cut -f1))"

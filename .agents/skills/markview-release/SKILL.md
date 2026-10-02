@@ -19,7 +19,10 @@ If any of these preconditions are not met, stop and report the problem to the us
 ## Steps
 
 1. **Version.** Set `version` in `[workspace.package]` in `Cargo.toml`, then
-   `cargo update --workspace --offline` to move the five workspace members in `Cargo.lock`.
+   `cargo update --workspace --offline` to update the workspace members in `Cargo.lock`.
+   Discover all publishable packages in the `web/` pnpm workspace and set their
+   `package.json` versions to the same release version; skip private packages.
+   Then run `pnpm --dir web install --lockfile-only --offline` to refresh the pnpm lockfile if needed.
 2. **Changelog.** Directly under `## Unreleased` in `CHANGELOG.md`, insert
    `## <version> - <YYYY-MM-DD>` (today's date from `date`) and a one- or two-line summary of
    the release. Leave `## Unreleased` in place and empty. cargo-dist takes the H2 whose version
@@ -40,6 +43,9 @@ If any of these preconditions are not met, stop and report the problem to the us
 ## Invariants
 
 - The tag must equal the manifest version without the `v`; dist rejects a mismatch at plan.
+- Every publishable package in the `web/` pnpm workspace must have the same version
+  as `[workspace.package]` in `Cargo.toml`; discover packages from the workspace configuration
+  rather than maintaining a fixed list of names or paths.
 - `release.yml`, `wix/main.wxs`, and `[package.metadata.wix]` are dist-owned: never hand-edit
   them, and run `dist generate` after editing `dist-workspace.toml`.
 - `dist` is not on `PATH`; use `~/.cargo/bin/dist`.

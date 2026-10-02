@@ -31,6 +31,8 @@ await esbuild.build({
 	sourcemap: true,
 	target: "es2022",
 	alias: { "@markview/web": join(pkg, "dist/index.js") },
+	loader: { ".otf": "file", ".ttf": "file" },
+	assetNames: "assets/[name]-[hash]",
 });
 
 cpSync(join(root, "apps/demo/index.html"), join(site, "index.html"));
@@ -38,4 +40,4 @@ cpSync(join(root, "apps/demo/src/style.css"), join(site, "main.css"));
 // `init()` looks for this name beside the module it was loaded from.
 cpSync(join(pkg, "dist/markview_web_bg.wasm"), join(site, "markview_web_bg.wasm"));
 
-console.log("built web/dist (index.html, main.js, main.css, markview_web_bg.wasm)");
+console.log("built web/dist (index.html, main.js, main.css, markview_web_bg.wasm, assets/)");

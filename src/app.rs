@@ -16,6 +16,7 @@ mod painting;
 mod pointer;
 mod preferences;
 pub(crate) mod search;
+mod settings_load;
 mod surface;
 mod tab_metrics;
 mod tab_navigation;
@@ -64,6 +65,7 @@ pub fn run() -> Result<()> {
 }
 
 enum Event {
+	SettingsLoaded(Box<settings_load::Completion>),
 	Ready(Box<Update>),
 	SearchReady(search::Result),
 	Parsed {
@@ -209,6 +211,7 @@ struct App<P = EventLoopProxy<Event>> {
 	_styles_watch: Option<FileWatch>,
 	ui: TextShaper,
 	preferences: preferences::Preferences,
+	settings_resources: settings_load::Resources,
 	/// What one wheel notch travels on this desktop, read once at startup:
 	/// nothing reports the desktop setting changing afterwards.
 	wheel_notch: crate::platform::WheelNotch,
@@ -291,6 +294,7 @@ impl<P: SendEvent> App<P> {
 				proxy.send(Event::SettingsChanged);
 			})
 		});
+		let settings_resources = settings_load::Resources::new();
 		let styles_watch = crate::stylesheet::directory().map(|dir| {
 			let proxy = proxy.clone();
 			FileWatch::directory(dir, move || {
@@ -316,6 +320,7 @@ impl<P: SendEvent> App<P> {
 			_styles_watch: styles_watch,
 			ui,
 			preferences,
+			settings_resources,
 			wheel_notch: crate::platform::wheel_notch(),
 			font_panel: font_panel::FontPanel::with_services(
 				services.handle.clone(),
@@ -355,13 +360,8 @@ impl<P: SendEvent> App<P> {
 				self.request(false);
 			}
 		}
-		if self.interaction.export_styles_open() {
-			self.preferences.style_entries = crate::stylesheet::catalog_for(
-				crate::stylesheet::directory().as_deref(),
-				Some(&self.preferences.export.style),
-				markview_core::style::StyleTarget::Pdf,
-			);
-		}
+		self.settings_resources.invalidate();
+		self.refresh_settings_resources(false);
 	}
 	pub(super) fn dimensions(&self) -> (f32, f32, f32) {
 		self.window.as_ref().map_or((1200.0, 800.0, 1.0), |w| {

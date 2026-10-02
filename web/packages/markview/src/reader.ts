@@ -3,6 +3,7 @@
 // device-pixel-ratio sizing, the wheel/pointer/keyboard bindings and
 // `Ctrl`/`Cmd`+`C` copying.
 
+import type { ResourceOptions } from "./resources.js";
 import { LayoutUpdate } from "./layout-update.js";
 import { Markview } from "./markview.js";
 import type { MarkviewOptions, MarkviewStats, Modifiers, ScrollMode } from "./types.js";
@@ -13,11 +14,13 @@ export interface CanvasReaderOptions {
 	markdown?: string;
 	/** Options handed to the engine. */
 	markview?: MarkviewOptions;
+	/** Host resource events; no image requests are fetched by default. */
+	resources?: ResourceOptions;
 	/** Layout budget per animation frame (8). */
 	stepBudgetMs?: number;
 	/** Called with the stats of every presented frame. */
 	onStats?: (stats: MarkviewStats) => void;
-	/** Called once when the frame loop stops on an error. */
+	/** Frame-loop failures and recoverable resource callback errors. */
 	onError?: (error: unknown) => void;
 	/** Motion ownership; defaults to `internal`. */
 	scrollMode?: ScrollMode;
@@ -105,7 +108,10 @@ export class CanvasReader {
 	 */
 	static async attach(canvas: HTMLCanvasElement, options: CanvasReaderOptions = {}): Promise<CanvasReader> {
 		const pinnedBox = pinLogicalSize(canvas);
-		const markview = await Markview.create(canvas, options.markview);
+		const resources = { ...options.resources };
+		const onError = resources.onError ?? options.onError;
+		if (onError) resources.onError = onError;
+		const markview = await Markview.create(canvas, options.markview, resources);
 		return new CanvasReader(markview, canvas, options, pinnedBox);
 	}
 
@@ -311,4 +317,3 @@ function pinLogicalSize(canvas: HTMLCanvasElement): PinnedBox | null {
 	canvas.style.height = `${rect.height}px`;
 	return { width, height };
 }
-

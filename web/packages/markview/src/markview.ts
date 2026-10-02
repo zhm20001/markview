@@ -3,6 +3,7 @@
 // parses the JSON once and hands out `MarkviewStats`.
 
 import { Markview as WasmMarkview, create as wasmCreate } from "../wasm/markview_web.js";
+import { ResourceEvents, type ResourceOptions } from "./resources.js";
 import { LayoutUpdate } from "./layout-update.js";
 import type { MarkviewOptions, MarkviewStats, Modifiers, ScrollMode, DocumentCursor, PointerAction } from "./types.js";
 import { parseStats, serializeOptions } from "./internal.js";
@@ -22,17 +23,19 @@ export class Markview {
 	 * update holding an older number no longer owns it.
 	 */
 	#generation = 0;
+	readonly #resources: ResourceEvents;
 
-	private constructor(handle: WasmMarkview) {
+	private constructor(handle: WasmMarkview, resources?: ResourceOptions) {
+		this.#resources = new ResourceEvents(resources);
 		this.#handle = handle;
 	}
 
 	/** Builds a handle that draws into `canvas`, importing `options`. */
-	static async create(canvas: HTMLCanvasElement, options?: MarkviewOptions): Promise<Markview> {
+	static async create(canvas: HTMLCanvasElement, options?: MarkviewOptions, resources?: ResourceOptions): Promise<Markview> {
 		// A handle created before any frame will size itself on the first
 		// `resize()`; nothing else needs to happen here.
 		const handle = await wasmCreate(canvas, serializeOptions(options));
-		return new Markview(handle);
+		return new Markview(handle, resources);
 	}
 
 	/** Parses `markdown`, lays the document out completely and publishes it. */
@@ -40,7 +43,10 @@ export class Markview {
 		// The full layout cancels whatever pass was pending, so every handle
 		// already handed out stops owning anything.
 		this.#supersede();
-		return parseStats(this.#live().setMarkdown(markdown));
+		const handle = this.#live();
+		const stats = parseStats(handle.setMarkdown(markdown));
+		this.#resources.replace(handle);
+		return stats;
 	}
 
 	/** Starts a resumable layout of `markdown` and returns its handle. */
@@ -49,6 +55,7 @@ export class Markview {
 		// the pass started; a step whose revision still matches has published
 		// nothing of its own yet.
 		const baseline = parseStats(this.#live().beginUpdate(markdown)).revision;
+		this.#resources.replace(this.#live());
 		const generation = this.#supersede();
 		// The update asks for the handle on every call, so a `destroy()` that
 		// lands before it finishes raises this class's own error, and it asks
@@ -59,12 +66,17 @@ export class Markview {
 			() => this.#live(),
 			() => this.#generation === generation,
 			baseline,
+			() => this.#flushResources(),
 		);
 	}
 
 	/** Renders and presents one frame from the latest published snapshot. */
 	frame(): MarkviewStats {
-		return parseStats(this.#live().frame());
+		this.#flushResources();
+		const handle = this.#live();
+		const stats = parseStats(handle.frame());
+		this.#resources.priorities(handle);
+		return stats;
 	}
 
 	/**
@@ -189,6 +201,7 @@ export class Markview {
 	 * reflow a narrower canvas triggers.
 	 */
 	stepPending(budgetMs?: number): boolean {
+		this.#flushResources();
 		const handle = this.#live();
 		if (!handle.updatePending()) return false;
 		const budget = budgetMs ?? 8;
@@ -205,8 +218,15 @@ export class Markview {
 
 	/** Releases the wasm handle. Later calls throw. */
 	destroy(): void {
-		this.#live().free();
+		const handle = this.#live();
 		this.#handle = null;
+		this.#supersede();
+		this.#resources.clear();
+		handle.free();
+	}
+
+	#flushResources(): void {
+		if (this.#resources.flush(this.#live())) this.#supersede();
 	}
 
 	/** The live handle, or the `destroy()` failure every later call must raise. */

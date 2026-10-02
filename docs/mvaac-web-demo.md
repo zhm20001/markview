@@ -283,8 +283,8 @@ which no `LayoutUpdate` owns.
 
 ```ts
 import init, { Markview, CanvasReader } from "@markview/web";
-await init();                       // call once before anything else
-await init({ wasmUrl: "/assets/markview_web_bg.wasm" });
+await init({ fonts: ["/fonts/NotoSerif-Regular.otf"] });
+await init({ wasmUrl: "/assets/markview_web_bg.wasm", fonts });
 ```
 
 The binary ships as `markview_web_bg.wasm` beside the package's JavaScript, and
@@ -295,6 +295,17 @@ would make every downstream bundler emit JavaScript alone and leave the binary
 behind. A sibling reference survives bundling, and a deployment that moves the
 JavaScript away from the binary passes `wasmUrl` instead. The name carries no
 content hash, because the package has to be able to find it.
+
+Text fonts come from the host through `InitOptions.fonts`, a readonly array of
+`FontSource` (`string | URL | ArrayBuffer | Uint8Array`). URL sources are fetched
+in parallel with wasm initialization; byte sources are copied into wasm with
+their view bounds preserved. OpenType, TrueType and collections are accepted;
+WOFF/WOFF2 and CSS fonts are not. Only KaTeX's math fonts remain embedded.
+Missing or invalid font files reject initialization and allow a corrected retry.
+Repeated calls share the first successful initialization's options and fonts;
+omitting `fonts` leaves the text collection empty. Paragraph metrics, including
+math placement, still need a host text face. The demo imports its pinned
+faces through esbuild's `file` loaders, which emit hashed assets under `assets/`.
 
 ## Viewport (frozen)
 
@@ -326,6 +337,10 @@ which reintroduces exactly the prefix-dependent work the resumable layout
 exists to remove. The selection and a drag in flight keep their reading
 positions across such a step; they are re-anchored only when the whole snapshot
 is replaced by a different document.
+
+A new pass over the same document keeps the displayed snapshot until its
+prefix covers both the selection and any held multi-click drag base. Replacing
+it earlier would clear positions whose blocks have not been laid out yet.
 
 ## Build (frozen)
 
@@ -479,7 +494,7 @@ Run with `pnpm --dir web test` against `web/dist`. The harness must:
 * The stdlib-only PNG decoder lives in `web/tests/png.mjs`.
 * The `wasm-bindgen` CLI 0.2.129 is vendored at
   `.tools/wasm-bindgen-0.2.129/wasm-bindgen`; the crate pins `=0.2.129`.
-* Only the 16 committed subset faces ship; `scripts/check_web_font_coverage.py`
+* The demo emits 16 committed subset faces as host assets; `scripts/check_web_font_coverage.py`
   guards the demo document against tofu. It unions every face, so a style gap
   can still slip through.
 
@@ -559,3 +574,103 @@ Unpublished targets wait for layout; deliberate scroll input cancels a waiting
 jump; completion without a target ends the wait. External and cross-document
 links are emitted through `onLink` with no default browser navigation. Images
 use `onImage`; no image viewer is included.
+
+## Asynchronous image resources
+
+`Markview.create(canvas, options?, resources?)` accepts `ResourceOptions`,
+independent of typography configuration. `CanvasReaderOptions.resources`
+forwards the same configuration. Neither entry point fetches images by default.
+The public package exports these types and helpers:
+
+```ts
+interface ResourceOptions {
+  onResources?: (events: readonly ImageResourceEvent[]) => void;
+  onError?: (error: unknown) => void;
+}
+interface ImagePixels {
+  width: number;
+  height: number;
+  rgba: Uint8Array; // Straight-alpha sRGB RGBA8.
+}
+interface ImagePriority {
+  region: "visible" | "near" | "offscreen" | "unknown";
+  distance: number | null; // CSS px; null means position is unknown.
+}
+interface ImageRequest {
+  readonly id: string;
+  readonly src: string;
+  readonly signal: AbortSignal;
+  readonly priority: ImagePriority;
+  resolve(pixels: ImagePixels): void;
+  reject(message: string): void;
+}
+type ImageResourceEvent =
+  | { kind: "request"; request: ImageRequest }
+  | { kind: "priority"; request: ImageRequest };
+
+function decodeImage(
+  source: Blob | ArrayBuffer | Uint8Array,
+  signal?: AbortSignal,
+): Promise<ImagePixels>;
+function loadImageUrl(
+  request: ImageRequest,
+  options?: { baseUrl?: string | URL; requestInit?: RequestInit },
+): Promise<void>;
+```
+
+Each document replacement emits its full set of Markdown/HTML image sources,
+including closed details, in a microtask. Identical original `src` strings are
+deduplicated in document order. Request IDs identify the component, document
+and source; they are independent of layout passes. The host owns queuing,
+throttling, concurrency, retry during a pending request, and caching. It may
+retain a request and resolve or reject it later. Returning a Promise from the
+callback does not complete a request; asynchronous host code must handle its
+own failures and call `reject`.
+
+Requests start with `unknown` priority. Each presented frame reports changed
+priorities for outstanding requests through `priority` events, using the same
+request object whose getter exposes its current priority. Laid-out occurrences
+intersecting the viewport are `visible`; occurrences within one viewport height
+vertically are `near`; others are `offscreen`. Distance is the shortest vertical
+distance to the viewport, zero for vertical overlap. The nearest occurrence
+wins, preferring a visible occurrence. Unpublished or closed content remains
+`unknown`. Geometry comes from the newest layout, never a retired document.
+Visibility uses the renderer's per-command horizontal offsets and overflow
+clipping, so panning a wide table updates image priorities without a reflow.
+Priority is a scheduling hint; the component never delays requests on its basis.
+
+`resolve` copies the RGBA view immediately. Positive integer dimensions, exact
+RGBA length and the renderer's texture edge are validated; invalid images
+become error placeholders. The first completion wins. Results are queued until
+`frame`, `stepPending`, or an active `LayoutUpdate.step/finish` submits the batch
+and starts one progressive reflow. That reflow supersedes existing layout
+handles; drive it with `stepPending`, or let `CanvasReader` do so. `setMarkdown`
+and `LayoutUpdate.finish` finish only layout, never wait for image requests.
+`stats.pending` continues to describe layout work only.
+
+Resize and typography changes retain requests, image results and details
+expansion. Resource reflow retains the newest text, scroll request, and
+rebasable selection. Document replacement and destruction abort requests and
+ignore late completions. Pixel snapshots remain alive while the old displayed
+snapshot still needs them. There is no automatic retry or cross-document cache;
+setting Markdown again creates fresh requests, which a host cache can answer.
+Without a callback images remain placeholders.
+
+A synchronous callback exception rejects outstanding new requests in that
+batch and reports through `resources.onError`, falling back to
+`CanvasReaderOptions.onError` or `console.error`. Priority callback exceptions
+are reported without stopping the frame loop or failing image requests.
+
+`loadImageUrl` is an opt-in helper, not a component setting. It fetches HTTP(S),
+Blob and `data:image/` sources, resolves relative URLs against `baseUrl` or
+`document.baseURI`, obeys browser CORS and the supplied fetch options, decodes a
+static frame, and calls `resolve/reject`. `decodeImage` preserves typed-array
+view bounds, infers `image/svg+xml` for SVG bytes or untyped Blobs, obeys
+cancellation and releases temporary browser objects. It
+returns pixels without completing a request, so hosts can compose it with
+custom storage or authentication. Browser decoding determines supported image
+formats; no Rust decoder or worker thread is added.
+
+Text fonts retain the initialization-only `InitOptions.fonts` contract.
+Mermaid is an internal rendering computation, not an external image request;
+its existing desktop renderer will be integrated with MVaaC separately.

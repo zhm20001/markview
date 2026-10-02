@@ -28,6 +28,8 @@ const types = {
   ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".wasm": "application/wasm",
+  ".otf": "font/otf",
+  ".ttf": "font/ttf",
   ".json": "application/json",
   ".png": "image/png",
   ".svg": "image/svg+xml",

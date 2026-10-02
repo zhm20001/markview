@@ -153,10 +153,6 @@ impl Preferences {
 		&mut self,
 		ui: &mut TextShaper,
 	) -> Option<bool> {
-		self.style_entries = crate::stylesheet::catalog(
-			crate::stylesheet::directory().as_deref(),
-			self.values.style.as_deref(),
-		);
 		let ids = self.values.style.clone().unwrap_or_else(|| {
 			vec![
 				if self.values.theme == Theme::Dark {

@@ -30,6 +30,7 @@ export class LayoutUpdate {
 
 	/** The revision published when this pass began. */
 	readonly #baseline: number;
+	readonly #prepare: () => void;
 
 	/**
 	 * The blocks this layout has published. It starts at zero and follows the
@@ -39,10 +40,11 @@ export class LayoutUpdate {
 	#published = 0;
 
 	/** @internal Created only by `Markview.beginLayout`. */
-	constructor(live: () => PendingHandle, current: () => boolean, baseline: number) {
+	constructor(live: () => PendingHandle, current: () => boolean, baseline: number, prepare: () => void) {
 		this.#live = live;
 		this.#current = current;
 		this.#baseline = baseline;
+		this.#prepare = prepare;
 	}
 
 	/**
@@ -68,6 +70,8 @@ export class LayoutUpdate {
 	/** Lays out for at most `budgetMs` (default 8). Returns `done`. */
 	step(budgetMs?: number): boolean {
 		if (this.stale) return true;
+		this.#prepare();
+		if (this.stale) return true;
 		const budget = budgetMs ?? 8;
 		const stats = parseStats(
 			this.#live().stepUpdate(Number.isFinite(budget) ? budget : 8),
@@ -83,6 +87,8 @@ export class LayoutUpdate {
 
 	/** Completes the layout synchronously. */
 	finish(): void {
+		if (this.stale) return;
+		this.#prepare();
 		if (this.stale) return;
 		const handle = this.#live();
 		handle.finishUpdate();
