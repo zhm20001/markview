@@ -64,6 +64,7 @@ settings_open_config = "settings.toml を開く"
 settings_paragraph_indent = "段落の字下げ"
 settings_reset_defaults = "既定値に戻す"
 settings_scroll_speed = "スクロール速度"
+settings_single_instance = "単一インスタンス"
 settings_text_size = "文字サイズ"
 
 # The reader's own labels.

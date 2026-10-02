@@ -94,6 +94,7 @@ impl Preferences {
 			codeblock_theme_override: settings.codeblock_theme_override.clone(),
 			codeblock_wrap: settings.codeblock_wrap,
 			scroll_speed: settings.scroll_speed,
+			single_instance: settings.single_instance,
 		};
 		for field in &args.overrides {
 			settings.copy_field(&explicit, *field);

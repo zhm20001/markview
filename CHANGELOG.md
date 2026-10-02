@@ -24,8 +24,21 @@ at the same level, without `[brackets]`.
 ### Added
 
 - Add a "Reveal" toolbar button and <kbd>Cmd+Shift+O</kbd> that show the active document's folder in the file manager; the Open button becomes a file-plus icon.
+- Add an opt-in single-instance setting that opens files from subsequent launches in tabs of the existing reader window.
+
+### Changed
+
+- Link macOS app bundles and Linux AppImages in release downloads; list the Windows MSI before the portable ZIP and include macOS installation and quarantine instructions.
 
 ### Fixed
+
+- Compare canonical paths in single-instance regression tests, fixing Windows path assertions and macOS directory-notification timeouts.
+- Clear cancelled wheel momentum targets and start paused or reversed packet streams from the displayed position, preventing jumps and motion against new input.
+- Restore the high-resolution wheel stream's packet momentum dropped by the interaction refactor, so a Windows touchpad's inertia rides across the gaps between packets again (#3).
+- Spend the speed a paused wheel stream leaves behind, whose stale carry sent the page on the old way and made a reversal answer nothing (#3).
+- Make the syntax-highlight cache regression test independent of background worker scheduling.
+- Keep single-instance authentication tokens private, bound IPC requests and reject forwarding after the event loop closes.
+- Forward macOS desktop-opened documents before a secondary instance exits and register surviving independent windows when enabling single-instance mode.
 
 - Preserve symlinked settings resources and fade loading/error feedback when previewing the document.
 

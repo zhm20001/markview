@@ -38,6 +38,7 @@ pub(crate) enum Command {
 	Align,
 	Hyphens,
 	CodeWrap,
+	SingleInstance,
 	/// Step the reader's scroll-speed multiplier by whole steps.
 	ScrollSpeed(i8),
 	/// First-line paragraph indent in whole em units.
@@ -963,6 +964,13 @@ impl ReaderSession {
 		}
 		self.scrolling.wheel_by(dy, now);
 	}
+	pub(crate) fn coast_wheel_by(&mut self, dy: f32, now: Instant) {
+		if dy != 0.0 {
+			self.pending_anchor = None;
+			self.follow_update = false;
+		}
+		self.scrolling.coast_wheel_by(dy, now);
+	}
 	pub(crate) fn animate_scroll_to(&mut self, target: f32, now: Instant) {
 		self.pending_anchor = None;
 		self.follow_update = false;
@@ -979,7 +987,7 @@ impl ReaderSession {
 		self.scrolling.cancel();
 	}
 	pub(crate) fn scroll_animating(&self) -> bool {
-		self.scrolling.animation.is_some()
+		self.scrolling.animating()
 	}
 	pub(crate) fn scroll_animation_deadline(
 		&self,
@@ -1008,7 +1016,7 @@ impl ReaderSession {
 		self.requested_options = None;
 		self.pending_anchor = None;
 		self.jump_origin = None;
-		self.scrolling.animation = None;
+		self.scrolling.cancel();
 	}
 
 	/// Expands the `<details>` elements enclosing `anchor` and reports whether

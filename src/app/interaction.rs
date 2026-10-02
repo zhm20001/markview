@@ -181,6 +181,15 @@ impl<P: super::SendEvent> App<P> {
 				self.close_tab(index);
 				return;
 			}
+			Command::SingleInstance => {
+				self.preferences.values.single_instance =
+					!self.preferences.values.single_instance;
+				self.setting_changed(Some(Setting::SingleInstance));
+				self.flush_settings();
+				self.register_instance();
+				self.redraw();
+				return;
+			}
 			Command::ScrollSpeed(delta) => {
 				self.preferences.values.step_scroll_speed(delta);
 				self.setting_changed(Some(Setting::ScrollSpeed));
@@ -799,6 +808,7 @@ impl<P: super::SendEvent> App<P> {
 		for field in &self.args.overrides {
 			self.preferences.values.copy_field(&previous, *field);
 		}
+		self.register_instance();
 		self.reload_styles();
 		if self.options() != options
 			&& self.readers.session.requested_options.as_ref()

@@ -64,6 +64,7 @@ settings_open_config = "開啟 settings.toml"
 settings_paragraph_indent = "段落縮排"
 settings_reset_defaults = "還原預設值"
 settings_scroll_speed = "捲動速度"
+settings_single_instance = "單一執行個體"
 settings_text_size = "文字大小"
 
 # The reader's own labels.

@@ -27,7 +27,9 @@ use winit::window::WindowId;
 #[derive(Clone)]
 struct StubProxy;
 impl SendEvent for StubProxy {
-	fn send(&self, _event: Event) {}
+	fn try_send(&self, _event: Event) -> bool {
+		true
+	}
 }
 
 /// What the app asks of its loop, answered without a window server.
