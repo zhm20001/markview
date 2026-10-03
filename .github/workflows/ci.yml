@@ -30,6 +30,7 @@ jobs:
           ./actionlint -color .github/workflows/ci.yml \
             .github/workflows/packages.yml .github/workflows/packaging.yml \
             .github/workflows/release-notes.yml \
+            .github/workflows/winget.yml \
             .github/workflows/checks.yml .github/workflows/fuzz.yml
       - name: Generated release files match the configuration
         # `cargo install cargo-dist` installs the bare `dist` binary, which
@@ -42,7 +43,42 @@ jobs:
       - name: Committed icons match the source SVG
         run: cargo run -p xtask -- icons --check
       - name: Shell scripts are sound
-        run: shellcheck scripts/build-web.sh scripts/package_*.sh scripts/verify_*.sh
+        run: shellcheck scripts/package_*.sh scripts/verify_*.sh
+
+  web-tools:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Test cross-platform build orchestration
+        run: python scripts/test_build_web.py
+
+  winget:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check first-submission and API failure handling
+        shell: pwsh
+        run: ./scripts/test_winget_registration.ps1
+      - name: Install WinGet
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          Install-Module Microsoft.WinGet.Client -Repository PSGallery -Force -Scope CurrentUser
+          Repair-WinGetPackageManager -AllUsers
+          winget --version
+      - name: Validate and install the WinGet package
+        shell: pwsh
+        run: ./scripts/verify_winget_package.ps1
 
   # The browser front end shares the engine but not its build: a `wasm32`
   # compile, the pinned `wasm-bindgen` CLI, the pnpm monorepo under `web/` and
@@ -58,31 +94,22 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
-      # The CLI must equal the `wasm-bindgen` crate pinned in
-      # `crates/markview-web/Cargo.toml`, or it refuses the module's schema.
-      # `rust-cache` keeps `~/.cargo/bin`, so a restored binary skips the
-      # compile and only a cold cache pays for it.
-      - name: Install the wasm-bindgen CLI
-        run: |
-          if [[ "$(wasm-bindgen --version 2>/dev/null)" == "wasm-bindgen 0.2.129" ]]; then
-            exit 0
-          fi
-          cargo install wasm-bindgen-cli --version 0.2.129 --locked
+        with:
+          cache-directories: .tools
       - name: Install pnpm
         run: npm install --global pnpm@11.26.0
       - name: Install the web workspace
         working-directory: web
         run: pnpm install --frozen-lockfile
-      # The TypeScript sources import the generated wasm glue, so the front end
-      # is built before anything type-checks or bundles it.
-      - name: Build the WebAssembly front end
-        run: scripts/build-web.sh
+      - name: Prepare WASM tools
+        working-directory: web
+        run: pnpm run setup
+      - name: Build WASM, packages and the demo site
+        working-directory: web
+        run: pnpm build
       - name: Type-check the TypeScript
         working-directory: web
         run: pnpm typecheck
-      - name: Build the package and the demo site
-        working-directory: web
-        run: pnpm build
       - name: Install the browser the suite drives
         working-directory: web
         run: pnpm exec playwright install --with-deps chromium
@@ -96,7 +123,7 @@ jobs:
   # packaging input.
   ci:
     if: always()
-    needs: [check, fuzz, packaging, web]
+    needs: [check, fuzz, packaging, winget, web-tools, web]
     runs-on: ubuntu-latest
     steps:
       - name: Fail unless every job succeeded

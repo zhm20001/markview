@@ -1,11 +1,15 @@
 # Document search verification
 
-Find uses Ctrl/Cmd+F, Enter/Shift+Enter and F3/Shift+F3. Queries are literal,
+`/` while reading starts an empty search without using the document selection,
+so `/foobar` searches for `foobar`. Ctrl/Cmd+F uses selected text or restores
+the previous query. Find navigates with
+Enter/Shift+Enter and F3/Shift+F3. Text inputs retain `/` as literal text;
+panels, option lists and image viewers keep keyboard priority. Queries are literal,
 ignore case by default, and use ICU word boundaries when **Word** is enabled.
 Editing a query immediately submits a cancellable background search without
 moving the reader or opening disclosures. IME preedit does not submit queries. Navigation wraps and opens only the target's ancestors.
 Switching documents closes the search bar. Query, options and current result
-belong to a tab and are retained when reopening search, but are not saved on exit.
+belong to a tab and are retained when reopening with Ctrl/Cmd+F, but are not saved on exit.
 
 ## Automated checks
 

@@ -25,6 +25,61 @@ fn fonts() -> FontConfig {
 }
 
 #[test]
+fn unavailable_weights_keep_the_covering_family_in_document_layout() {
+	let doc = document::parse("A");
+	let mut engine = LayoutEngine::new();
+	for (requested, expected) in [
+		(1, 400),
+		(300, 400),
+		(400, 400),
+		(500, 400),
+		(600, 700),
+		(700, 700),
+		(900, 700),
+		(1000, 700),
+	] {
+		for property in ["inherited", "weight", "min_weight"] {
+			let (inherited, candidate) = if property == "inherited" {
+				(requested, String::new())
+			} else {
+				(1, format!(",{property}={requested}"))
+			};
+			let mut sheet = (*Stylesheet::bundled(false)).clone();
+			sheet.merge(&Stylesheet::parse(&format!(
+				"format_version=2\nversion=1\n[[fontdef]]\nid='reading'\nlookfor=['Noto Serif','Noto Sans']\n[[rule]]\nwhen=['body']\nweight={inherited}\nfont=[{{family='reading'{candidate}}},{{family='sans-serif',weight=400}}]"
+			)).unwrap());
+			let snapshot = engine.layout(
+				&doc,
+				&LayoutOptions {
+					fonts: fonts(),
+					stylesheet: Arc::new(sheet),
+					..Default::default()
+				},
+			);
+			let glyphs: Vec<_> = snapshot
+				.blocks
+				.iter()
+				.flat_map(|block| &block.layout.draws)
+				.filter_map(|draw| match draw {
+					Draw::Glyph(glyph) => Some(glyph),
+					_ => None,
+				})
+				.collect();
+			assert!(!glyphs.is_empty());
+			let expected_font = if expected == 400 {
+				include_bytes!("fonts/NotoSerif-Regular-subset.otf").as_slice()
+			} else {
+				include_bytes!("fonts/NotoSerif-Bold-subset.otf").as_slice()
+			};
+			assert!(
+				glyphs.iter().all(|g| g.font.data.data() == expected_font),
+				"{property}={requested} must keep Noto Serif at weight {expected}"
+			);
+		}
+	}
+}
+
+#[test]
 fn overflowing_line_height_does_not_stall_label_shaping() {
 	let text = String::from_utf8_lossy(&[0x01, 0xb3, 0xc1, 0, 0, 0x01]);
 	let mut shaper = TextShaper::with_fonts(fonts());

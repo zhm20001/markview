@@ -35,6 +35,269 @@ impl Rng {
 	}
 }
 
+/// TeX macro and brace fragments the math mutator splices in.
+///
+/// The `math` corpus reaches the macro expander only incidentally: a KaTeX
+/// test-suite snippet that happens to contain `\def` is rare, and the byte
+/// mutator has to discover `\`, `e`, `d`, `e`, `f` in order and then a
+/// matching `{`/`}` pair. Every entry here is a token the expander, the depth
+/// budget, or the argument reader treats specially, so a splice lands inside
+/// a macro body far more often than random bytes do. The list is deliberately
+/// *fragments* rather than whole formulas: a fragment composes with whatever
+/// the corpus unit already is, which is what keeps the search from collapsing
+/// onto one shape.
+const MATH_MACRO_FRAGMENTS: &[&str] = &[
+	// Definitions and expansion. `\edef` with a self-doubling body is the
+	// known exponential path; the fragments below are the parts that make it
+	// reachable from an arbitrary seed rather than a hand-written one.
+	"\\def",
+	"\\edef",
+	"\\xdef",
+	"\\gdef",
+	"\\let",
+	"\\newcommand",
+	"\\renewcommand",
+	"\\providecommand",
+	"\\global",
+	"\\globaldefs",
+	"\\noexpand",
+	"\\relax",
+	"\\futurelet",
+	"\\expandafter",
+	"\\csname",
+	"\\endcsname",
+	"\\begingroup",
+	"\\endgroup",
+	"\\bgroup",
+	"\\egroup",
+	"\\edef\\m{\\m\\m}",
+	"\\def\\m{\\m}",
+	"\\edef\\a{\\b}\\edef\\b{\\a}",
+	// Character codes: the known `i64` accumulator, and its siblings.
+	"\\char",
+	"\\char\"",
+	"\\char'",
+	"\\char`",
+	"\\@char",
+	"\\char\"FFFFFFFFFFFFFFFF",
+	"\\char9999999999999999999",
+	"\\unicode",
+	// Argument and grouping shapes.
+	"{",
+	"}",
+	"{{",
+	"}}",
+	"#1",
+	"#2",
+	"{#1}",
+	"[1]",
+	// Depth and stacking: the constructs the depth budget names.
+	"\\substack",
+	"\\substack{",
+	"\\mathchoice",
+	"\\mathchoice{a}{b}{c}{d}",
+	"\\mathstrut",
+	"\\left",
+	"\\right",
+	"\\middle",
+	"\\big",
+	"\\Big",
+	"\\bigg",
+	"\\Bigg",
+	"\\sqrt",
+	"\\frac",
+	"\\dfrac",
+	"\\tfrac",
+	"\\cfrac",
+	"\\genfrac",
+	"\\overline",
+	"\\underline",
+	"\\overbrace",
+	"\\underbrace",
+	"\\widehat",
+	"\\widetilde",
+	"\\overleftarrow",
+	"\\overrightarrow",
+	"\\xrightarrow",
+	"\\xleftarrow",
+	// Boxes, phantoms and vertical movement.
+	"\\hbox",
+	"\\text",
+	"\\mbox",
+	"\\phantom",
+	"\\vphantom",
+	"\\hphantom",
+	"\\smash",
+	"\\vcenter",
+	"\\raisebox",
+	"\\rlap",
+	"\\llap",
+	"\\rule",
+	"\\kern",
+	"\\hskip",
+	"\\hspace",
+	"\\mkern",
+	"\\mskip",
+	// Class, styling and colour wrappers.
+	"\\mathrel",
+	"\\mathord",
+	"\\mathbin",
+	"\\mathop",
+	"\\mathpunct",
+	"\\mathinner",
+	"\\displaystyle",
+	"\\textstyle",
+	"\\scriptstyle",
+	"\\scriptscriptstyle",
+	"\\color",
+	"\\textcolor",
+	"\\colorbox",
+	"\\fcolorbox",
+	"\\Huge",
+	"\\tiny",
+	// Environments: the array reader has its own depth accounting.
+	"\\begin{array}{c}",
+	"\\begin{matrix}",
+	"\\begin{cases}",
+	"\\begin{aligned}",
+	"\\begin{CD}",
+	"\\begin{prooftree}",
+	"\\end{array}",
+	"\\end{matrix}",
+	"\\end{cases}",
+	"\\end{aligned}",
+	"\\\\",
+	"&",
+	"\\hline",
+	"\\hdashline",
+	"\\cr",
+	// Text-mode and unicode entries.
+	"\\verb|",
+	"\\verb",
+	"\\text{",
+	"\\ce{",
+	"\\pu{",
+	"\\unicode{x}",
+	"\u{00b2}",
+	"\u{2081}",
+	"\u{1D62}",
+	"\u{2C7C}",
+	// Delimiters and symbols wide enough to matter to layout.
+	"\\langle",
+	"\\rangle",
+	"\\vert",
+	"\\Vert",
+	"\\|",
+	"\\,",
+	"\\;",
+	"\\!",
+	"\\quad",
+	"\\qquad",
+	"\\limits",
+	"\\nolimits",
+	"\\tag{1}",
+	"\\notag",
+	"\\nonumber",
+];
+
+/// Structure-aware *LaTeX* mutation for the `math` target.
+///
+/// The math target consumes a bare formula, not a Markdown document, so the
+/// line-oriented mutators below are the wrong shape: they think in headings
+/// and fences that LaTeX reads as literal text. This one edits at TeX's own
+/// granularity instead — it splices macro fragments, wraps spans in braced
+/// groups, duplicates a span (which is what turns one `\edef` level into
+/// two), and falls back to the byte mutator.
+///
+/// The fallback share is higher than the Markdown mutator's (1/2 rather than
+/// 1/4): a formula is short, and libFuzzer's own mutator is good at finding
+/// the byte-level `\`/`{`/`}` combinations that make a fragment parse.
+pub fn math(data: &mut [u8], size: usize, max_size: usize, seed: u32) -> usize {
+	let size = size.min(max_size);
+	let mut rng = Rng::new(seed);
+	if size == 0 || rng.chance(1, 2) {
+		return fuzzer_mutate(data, size, max_size);
+	}
+	let mut text: Vec<u8> = data[..size].to_vec();
+	// Only splice at a character boundary; a LaTeX source is UTF-8 and a
+	// mid-scalar insert would be rejected before it reached the expander.
+	// The buffer may not be valid UTF-8 at all (the target lossily converts),
+	// so boundaries come from the bytes rather than from `str`.
+	let mut boundaries: Vec<usize> = (0..=text.len())
+		.filter(|i| *i == text.len() || text[*i] & 0xC0 != 0x80)
+		.collect();
+	if boundaries.len() < 2 {
+		return fuzzer_mutate(data, size, max_size);
+	}
+	boundaries.pop();
+
+	match rng.range(8) {
+		// Splice a macro fragment at a random boundary.
+		0 | 1 => {
+			let frag =
+				MATH_MACRO_FRAGMENTS[rng.range(MATH_MACRO_FRAGMENTS.len())];
+			let at = boundaries[rng.range(boundaries.len())];
+			text.splice(at..at, frag.bytes());
+		}
+		// Delete a random span: shortens a macro name, strips a brace.
+		2 => {
+			let (lo, hi) = span(&mut rng, &boundaries);
+			text.drain(lo..hi);
+		}
+		// Duplicate a span in place. On `\edef\m1{\m0\m0}` this is exactly
+		// the doubling step, so the exponential path is one mutation away
+		// from any seed that already holds one level.
+		3 => {
+			let (lo, hi) = span(&mut rng, &boundaries);
+			let copied = text[lo..hi].to_vec();
+			text.splice(hi..hi, copied);
+		}
+		// Wrap a span in braces.
+		4 => {
+			let (lo, hi) = span(&mut rng, &boundaries);
+			text.splice(lo..lo, *b"{");
+			text.splice(hi + 1..hi + 1, *b"}");
+		}
+		// Drop the first brace, if there is one.
+		5 => {
+			if let Some(pos) =
+				text.iter().position(|b| *b == b'{' || *b == b'}')
+			{
+				text.remove(pos);
+			}
+		}
+		// Move a span: relocates a macro body into another macro's argument,
+		// which is how a benign definition becomes a self-referential one.
+		6 => {
+			let (lo, hi) = span(&mut rng, &boundaries);
+			let moved: Vec<u8> = text.drain(lo..hi).collect();
+			if !moved.is_empty() {
+				let at =
+					boundaries[rng.range(boundaries.len())].min(text.len());
+				text.splice(at..at, moved);
+			}
+		}
+		// Swap two adjacent bytes, so a `\def` can become `\edef` and back.
+		_ => {
+			if text.len() >= 2 {
+				let i = rng.range(text.len() - 1);
+				text.swap(i, i + 1);
+			}
+		}
+	}
+	text.truncate(max_size);
+	let len = text.len().min(data.len());
+	data[..len].copy_from_slice(&text[..len]);
+	len
+}
+
+/// An ordered `(lo, hi)` byte range drawn from two random boundaries.
+fn span(rng: &mut Rng, boundaries: &[usize]) -> (usize, usize) {
+	let a = boundaries[rng.range(boundaries.len())];
+	let b = boundaries[rng.range(boundaries.len())];
+	if a <= b { (a, b) } else { (b, a) }
+}
+
 /// Structural one-liners the Markdown mutator can insert at any position.
 const MD_LINES: &[&str] = &[
 	"---",

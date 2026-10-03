@@ -43,6 +43,13 @@
 | Windows | `.msi`、`.zip` |
 | macOS | 打包好的 `.app`（zip） |
 
+[WinGet 社区收录 PR](https://github.com/microsoft/winget-pkgs/pull/445697) 合并后，Windows 用户可以用以下命令安装和更新：
+
+```powershell
+winget install --id szdytom.Markview --exact --source winget
+winget upgrade --id szdytom.Markview --exact --source winget
+```
+
 Linux 与 macOS 也可以用安装脚本：
 
 ```sh
@@ -225,6 +232,8 @@ markview fonts verify            # 检查下载目录
 | [架构说明](docs/architecture.md) | 修改代码时应保持的边界 |
 | [安全与威胁模型](docs/security.md) | 不可信文档能够触及的范围 |
 | [开发指南](docs/development.md) | 构建、测试与修改行为 |
+
+独立的 [Web 组件](docs/mvaac.md)提供框架无关的 WASM 预览和 CodeMirror 分屏编辑器；编辑能力属于 Web 包，原生应用仍为只读阅读器。
 
 ## 开发
 

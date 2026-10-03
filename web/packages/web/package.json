@@ -1,0 +1,26 @@
+{
+  "name": "@markview/web",
+  "version": "0.1.11",
+  "description": "Deprecated compatibility entry for Markview viewer and browser image helpers",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "node ../build-package.mjs web"
+  },
+  "dependencies": {
+    "@markview/viewer": "workspace:*",
+    "@markview/resources": "workspace:*"
+  }
+}

@@ -5,7 +5,6 @@
 
 use libfuzzer_sys::fuzz_target;
 use markview_core::document;
-use markview_core::layout::LayoutEngine;
 use mvfuzz::{budget, oracle, pipeline, ratex};
 
 fuzz_target!(|data: &[u8]| {
@@ -23,10 +22,10 @@ fuzz_target!(|data: &[u8]| {
 	let images = markview_core::image::ImageSnapshot::default();
 
 	// O5.1: the second pass over a warm cache and a cold engine must agree.
-	let mut warm = LayoutEngine::new();
+	let mut warm = pipeline::differential_engine();
 	let a = warm.layout(&doc, &options);
 	let b = warm.layout(&doc, &options);
-	let fresh = LayoutEngine::new().layout(&doc, &options);
+	let fresh = pipeline::differential_engine().layout(&doc, &options);
 	assert_eq!(
 		oracle::layout(&a),
 		oracle::layout(&b),
@@ -39,7 +38,7 @@ fuzz_target!(|data: &[u8]| {
 	);
 
 	// O5.2: a prefix snapshot equals the final one block for block.
-	let mut progressive = LayoutEngine::new();
+	let mut progressive = pipeline::differential_engine();
 	let keep = (oracle::derive(data) as usize % 3).max(1);
 	let mut prefix = None;
 	let final_progressive = progressive

@@ -21,31 +21,90 @@ at the same level, without `[brackets]`.
 
 ## Unreleased
 
-### Added
-
 - Add a "Reveal" toolbar button and <kbd>Cmd+Shift+O</kbd> that show the active document's folder in the file manager; the Open button becomes a file-plus icon.
-- Add an opt-in single-instance setting that opens files from subsequent launches in tabs of the existing reader window.
+
+## 0.1.11 - 2026-10-03
+
+**Highlights**:
+
+- Start a search with `/` and jump straight to the next match.
+- Refined touchpad and wheel scrolling, without stalls or lurches.
+- New setting to open files from a second launch in tabs of the existing window.
+- Correct CJK bold rendering in the reader and PDF export.
+- More predictable triple-click and drag selection.
+- Continued robustness and security hardening.
 
 ### Changed
 
+- Pin Comrak to upstream revision `4127507`, which includes all of Markview's merged parser fixes, in the reader and fuzz harness.
+- Expand MVaaC demo fonts with variable Latin weights and italics plus Chinese medium/semibold faces, using npmmirror with a jsDelivr fallback.
+- Use version-pinned CDN WOFF2 faces for MVaaC demo Latin and Simplified Chinese text, and persist font downloads across reloads with Cache Storage.
+- Remove the MVaaC demo’s redundant reading hint.
+- Redesign the MVaaC demo with restrained typesetting, square controls, a centered width-limited workspace and a compact header with a GitHub link.
+- Load the MVaaC SPA’s Noto fonts from version-pinned CDN URLs and keep tiny subset fonts in the regression harness only.
+- Show font download counts, received bytes or percentages and renderer/page preparation stages during MVaaC SPA startup.
+
+### Added
+
+- Start an empty document search with `/` while reading, ignoring selected text and preserving literal slash input in text fields.
+- Expand the `fuzz/` harness with three document-structure oracles (reference resolution, source-range content, `<details>` structure), a structural PDF readback oracle, a LaTeX-aware `math` mutator, and pinned-slot campaign scripts.
+- Prepare WinGet package manifests, installation checks and stable-release update submissions for `szdytom.Markview`; releases keep moving while first-time registration is pending.
+- Add an opt-in single-instance setting that opens files from subsequent launches in tabs of the existing reader window.
 - Link macOS app bundles and Linux AppImages in release downloads; list the Windows MSI before the portable ZIP and include macOS installation and quarantine instructions.
 
 ### Fixed
 
+- Keep inline SVG decoding and disclosure source navigation compatible with container-prefix and footnote parsing fixes.
+- Keep a covering font family when the requested weight is unavailable, selecting its closest available weight instead of skipping to the next candidate.
+- Start a paused wheel stream's new travel at packet arrival and decay speed across stalled frames, preventing jumps when rendering resumes (#3).
 - Compare canonical paths in single-instance regression tests, fixing Windows path assertions and macOS directory-notification timeouts.
 - Clear cancelled wheel momentum targets and start paused or reversed packet streams from the displayed position, preventing jumps and motion against new input.
 - Restore the high-resolution wheel stream's packet momentum dropped by the interaction refactor, so a Windows touchpad's inertia rides across the gaps between packets again (#3).
 - Spend the speed a paused wheel stream leaves behind, whose stale carry sent the page on the old way and made a reversal answer nothing (#3).
+- Continue a wheel stream through the flushes a batchy touchpad delivers after a silence and the whole detents it rounds out mid-gesture, instead of killing the momentum into a dead stop and a lurch (#3).
+- Still the page within a beat once its packets go quiet, by lifting the lead and dying at a faster quiet rate, so a hand that halts on the pad no longer leaves a long coast (#3).
+- Cap the chase and adapt the lead to packet spacing, let a late flush keep the stream's decaying speed instead of claiming one from its silence-long distance, and believe a packet's own rate no faster than the chase — a flush lands as a dense burst of large packets whose rates name speeds no finger reached — so all of them arrive as glides instead of lunges and freezes (#3).
 - Make the syntax-highlight cache regression test independent of background worker scheduling.
 - Keep single-instance authentication tokens private, bound IPC requests and reject forwarding after the event loop closes.
 - Forward macOS desktop-opened documents before a secondary instance exits and register surviving independent windows when enabling single-instance mode.
+- Run campaign blocks in libFuzzer fork mode with `-keep_seed`, so a known crash no longer ends the block before its time budget and the fork startup merge stays off the clock.
+- Signal the whole process group when `rsscap.sh` passes its RSS ceiling, so a heavy descendant cannot outlive the wrapper.
+- Block in `slot.sh --wait` until a slot frees instead of failing immediately like `--try`, and keep the holder record when a lock is opened.
+- Create the campaign artifact, slot and guard-log directories before they are first used, so a fresh checkout can start and check a campaign.
+- Match each reference text run to the reference span that contains it in the `refdef` oracle, so a link resolving to a destination its definition contradicts is caught.
+- Stop the `refdef` definition scan from reporting list-, quote- and raw-HTML-contained definitions as parser crashes, and never invent a definition row.
+- Preserve the order of explicit `mathprobe` probe sizes instead of duplicating and reversing them.
+- Normalize footnote labels before numbering, so a disclosure body reusing a document label references the one note instead of allocating a second number.
+- Ignore `<details>` inside code spans and fenced code when deciding whether a prefix ends in an open HTML block, restoring the opening-viewport fast path.
+- Preserve paragraph source ranges before tables with CRLF line endings by updating the Comrak pin.
+- Keep indented code block source ranges stable across trailing blank lines by updating the Comrak pin.
+- Keep `<details>` footnotes once at the document's end, including cross-disclosure references; defer incomplete disclosures and unstable note numbering in prefixes, and assign heading anchors in final reading order.
+- Give adjacent disclosures their own source ranges, retaining original offsets through multiline HTML tags inside lists and block quotes.
+- Complete syntax highlighting synchronously in layout differential fuzzing to avoid reporting background color updates as cache divergence.
+- Keep preceding blocks unchanged when an unused link reference definition is appended, with correct Comrak table source positions and consistent `<details>` body termination.
+- Pin Comrak to our front-matter line-count fix to prevent a `<details>` parsing panic on UTF-8 documents with lone carriage returns, and keep closing-tag ranges correct after HTML normalization.
+- Unify the MVaaC demos into a reading/editing SPA with shared documents, an embedded component guide, file opening, downloads and a compact responsive workspace.
+- Extract editor-independent scroll anchors, input ownership and versioned request cancellation into `@markview/scroll-sync`.
+- Render inline SVG as static host-decoded images and reject unsupported external SVG dependencies in browser resources.
+- Add per-instance shared font sets, an explicit font loading/cache package and optional WOFF/WOFF2 decoding in official WASM builds.
+- Add reusable viewer/editor/resource packages, a CodeMirror split editor with automatic source following, configurable TOC/layout and a built-package example.
+- Add versioned MVaaC source geometry, complete TOC and a container-mounted viewer with progressive navigation and reading-position events.
 
+- Center the MVaaC editor divider grip in horizontal and vertical layouts, including hosts with a global border-box reset.
+- Keep MVaaC disclosure summaries in their intended font and spacing by supplying their required 600 weight.
+- Evict MVaaC demo font cache batches that fail validation so malformed HTTP 200 responses cannot prevent startup recovery.
+- Preserve CR source-line offsets and restrict text-free collapsed-container scroll anchors to their visible opening line.
+- Exclude relocated footnotes from MVaaC scroll anchors so early definitions cannot displace main prose synchronization.
+- Batch MVaaC scroll anchors in Rust and retain progressive-layout prefixes instead of repeating quadratic source queries on every revision.
+- Rebuild MVaaC editor scroll following around continuous, reversible position maps with shared endpoints and gesture ownership to prevent jumps and feedback.
+- Keep editor-to-preview scrolling continuous across wrapped image source and multiline SVG, including adjacent blank lines.
+- Parse adjacent SVG elements iteratively and preserve normalized code and math text extending beyond inline SVG boundaries.
+- Preserve Unicode source ranges in adjacent quoted disclosures, atomic image geometry and source navigation through horizontally panned content.
+- Retain source reading targets while progressive reflow has not yet published enough content to position them.
+- Preserve original source ranges inside HTML disclosures and code-line offsets across CRLF input.
 - Preserve symlinked settings resources and fade loading/error feedback when previewing the document.
-
 - Load settings styles and font catalogues in the background with immediate loading feedback, cached refreshes and retry controls.
-
 - Exclude automatic CJK/Latin spacing from the start and end of selection highlights.
-
 - Limit triple-click selection and dragging to the current paragraph or table cell inside lists, block quotes and other containers.
 - Preserve CJK bold in reader and PDF themes by treating the preferred Medium face as a minimum weight instead of an absolute override.
 - Ignore the pointer position reports the macOS backend repeats before every wheel event, which pulled an open list's highlight back to the hovered option between notches.
@@ -73,6 +132,7 @@ This is a hardening release: hostile-input fuzzing removed panics in parsing, in
 
 ### Changed
 
+- Simplify MVaaC builds with pnpm setup/build commands, a cross-platform Python WASM builder and a TypeScript-only rebuild path.
 - Point the Comrak patch at upstream again, now carrying the fence-offset fix and the multiline inline source-position fix.
 - Align publishable web package versions with Markview and synchronize them during releases.
 - Load MVaaC text fonts from host URLs or bytes during initialization; the esbuild demo emits separate font assets, while KaTeX stays embedded in wasm.

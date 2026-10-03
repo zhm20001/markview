@@ -6,7 +6,7 @@
 use libfuzzer_sys::fuzz_target;
 use markview_core::limits::Limits;
 use markview_core::math::MathEngine;
-use mvfuzz::{budget, oracle, ratex};
+use mvfuzz::{budget, mutators, oracle, ratex};
 
 fuzz_target!(|data: &[u8]| {
 	let budget = budget::Budget::parse().from_env();
@@ -42,3 +42,26 @@ fuzz_target!(|data: &[u8]| {
 	}
 	guard.finish(&budget, latex.len());
 });
+
+/// The `math` corpus reaches the macro expander only incidentally, so the
+/// target biases every mutation towards TeX's own structure: see
+/// `mvfuzz::mutators::math`.
+// libFuzzer owns the buffer and passes its initialized length; the C ABI fixes
+// this signature, so the raw-pointer contract cannot be moved into a Rust
+// `unsafe fn` the caller would have to uphold.
+#[expect(
+	clippy::not_unsafe_ptr_arg_deref,
+	reason = "libFuzzer calls this with a live buffer of `max_size` bytes"
+)]
+#[unsafe(no_mangle)]
+pub extern "C" fn LLVMFuzzerCustomMutator(
+	data: *mut u8,
+	size: usize,
+	max_size: usize,
+	seed: u32,
+) -> usize {
+	// SAFETY: libFuzzer owns the buffer, passes its initialized length, and
+	// the returned length is what it will read next.
+	let slice = unsafe { std::slice::from_raw_parts_mut(data, max_size) };
+	mutators::math(slice, size, max_size, seed)
+}

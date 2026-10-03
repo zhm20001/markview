@@ -41,7 +41,7 @@ members = [
 resolver = "3"
 
 [workspace.package]
-version = "0.1.10"
+version = "0.1.11"
 edition = "2024"
 # `krilla` sets the floor: the PDF backend needs newer standard-library items.
 rust-version = "1.92"
@@ -203,10 +203,11 @@ inherits = "release"
 name = "markview"
 path = "src/main.rs"
 
-# Temporary until a release carries the fence-offset fix (upstream PR #836)
-# and the multiline inline source-position fix (upstream PR #855).
+# Temporary until a release carries the source-position fixes for fences,
+# multiline inlines, front matter, tables, trailing blank
+# lines in indented code blocks, and CRLF paragraphs before tables.
 [patch.crates-io]
-comrak = { git = "https://github.com/kivikakk/comrak", rev = "9b0e8ee12ca941642da46e1cebb396061b5d23da" }
+comrak = { git = "https://github.com/kivikakk/comrak", rev = "4127507465ee41e0a6298fd4b217b685a499af79" }
 # Our fork adds `LayoutConfig::metrics`, which lets Markview measure diagram
 # labels with the faces its own stylesheet selected (upstream PR #151). The rev
 # below is the change based on v0.3.1, the release Markview's diagrams are

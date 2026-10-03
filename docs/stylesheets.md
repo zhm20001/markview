@@ -358,7 +358,7 @@ when = ["body"]
 font = [{ family = "reading" }]
 ```
 
-Use `variant = "normal"`, `"italic"`, or `"oblique"`, and an optional weight from 1 to 1000. Markview skips a candidate when the face, requested style, or complete grapheme cluster is unavailable; it does not synthesize weight. A slanted candidate may set `synthetic_italic = true` to shear an upright face by 14° instead of being skipped, which is what CJK families—they rarely ship an italic—need:
+Use `variant = "normal"`, `"italic"`, or `"oblique"`, and an optional weight from 1 to 1000. Markview keeps a family that covers the complete grapheme cluster, matching an unavailable weight to its closest available face using CSS weight matching. It skips a candidate when the family, requested style, or complete grapheme cluster is unavailable; it does not synthesize weight. A slanted candidate may set `synthetic_italic = true` to shear an upright face by 14° instead of being skipped, which is what CJK families—they rarely ship an italic—need:
 
 ```toml
 [[rule]]
@@ -480,11 +480,11 @@ A full Noto CJK collection, rather than the subset faces, is **tens of MiB per f
 
 ## Heavier CJK UI labels
 
-MVSS accepts a per-candidate `weight` from 1 to 1000. It is an **absolute** weight, not an offset from the inherited one. Markview requires an exact static weight or a variable font whose `wght` axis covers the requested value; it does not synthesize bold or round 450 to 500. An unavailable candidate is skipped. A `fontdef` chooses its first installed family before matching weight, so later `lookfor` entries do not rescue a missing Medium face in that family.
+MVSS accepts a per-candidate `weight` from 1 to 1000. It is an **absolute** weight, not an offset from the inherited one. Markview prefers an exact weight, then uses CSS weight matching within the same family. For example, 450 selects 500 when both Regular and Medium are available, and 500 selects Regular in a family with only Regular and Bold. Variable fonts use the requested value clamped to their `wght` range. Markview passes the available weight to the shaper without synthesizing bold. A `fontdef` chooses its first installed family before matching weight, so a missing Medium face keeps that family's closest weight rather than trying a later `lookfor` entry or font candidate.
 
 A cluster no candidate covers is not lost to the platform's own fallback table, which knows no family for the script most symbol blocks belong to. The shaper instead scans the character maps of every family the machine offers — installed, `--fonts`, or downloaded — and draws the cluster from the face closest in style and weight, remembered per cluster so the scan costs once per document. Only when nothing installed covers the cluster does the glyph stay missing, and the log records it: `no face covers [U+27FA]: the configured stack and the whole collection were scanned.` A font covering the code points, installed or named in the stack, silences it.
 
-A candidate may instead declare `min_weight` (1–1000), which requests the larger of that minimum and the inherited weight. `weight` and `min_weight` are mutually exclusive. Bundled reader and PDF themes use `min_weight = 500` for CJK: ordinary text prefers Medium, while strong text inherits 700. A following inherited-weight candidate handles families without Medium. [UI CJK Medium](../examples/ui-cjk-medium.mvss.toml) also provides this behavior as a focused overlay for custom themes. Latin retains its normal UI weight and Emoji stays at 400. Install it and place it before the reader theme:
+A candidate may instead declare `min_weight` (1–1000), which requests the larger of that minimum and the inherited weight. `weight` and `min_weight` are mutually exclusive. Bundled reader and PDF themes use `min_weight = 500` for CJK: ordinary text prefers Medium, while strong text inherits 700. Families without Medium use their closest available weight in that candidate. [UI CJK Medium](../examples/ui-cjk-medium.mvss.toml) also provides this behavior as a focused overlay for custom themes. Latin retains its normal UI weight and Emoji stays at 400. Install it and place it before the reader theme:
 
 ```sh
 markview ss install examples/ui-cjk-medium.mvss.toml
@@ -493,13 +493,13 @@ markview examples/themes.md --style ui-cjk-medium --style light
 
 The overlay affects UI labels, not document typography. A fixed 500 candidate also replaces an inherited 700 for CJK when Medium exists; use it deliberately if a theme relies on bold UI hierarchy. It is not a general “add 100” setting.
 
-The GPU comparison uses the host's installed fonts and draws 400, 450 with fallback, and 500 with fallback at 12/14/16 logical pixels on light/dark panels and at 1×, 1.25× and 2× scale:
+The GPU comparison uses the host's installed fonts and draws requested weights 400, 450 and 500 at 12/14/16 logical pixels on light/dark panels and at 1×, 1.25× and 2× scale:
 
 ```sh
 cargo test -p markview cjk_ui_weight_comparison -- --ignored --nocapture
 ```
 
-Images are written to `artifacts/cjk-weight/`. With the tested static Noto Sans CJK SC faces, 500 improves small-label stroke visibility, while 450 falls back to Regular. Other families and operating systems need their own check; the screenshot's Traditional/Japanese sample still uses the SC font convention for this controlled comparison.
+Images are written to `artifacts/cjk-weight/`. With static Noto Sans CJK SC Regular and Medium faces, both 450 and 500 select Medium. Other families and operating systems need their own check; the screenshot's Traditional/Japanese sample still uses the SC font convention for this controlled comparison.
 
 ## Images and captions
 

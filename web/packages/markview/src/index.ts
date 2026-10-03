@@ -1,4 +1,4 @@
-// Public surface of `@markview/web`: `init()` plus the component classes.
+// Public surface of `@markview/viewer`: `init()` plus the component classes.
 
 import { default as __wbg_init, configureFonts, type InitInput } from "../wasm/markview_web.js";
 import { loadFontSources } from "./fonts.js";
@@ -7,12 +7,14 @@ import { LayoutUpdate } from "./layout-update.js";
 import { Markview } from "./markview.js";
 import { CanvasReader } from "./reader.js";
 import type { CanvasReaderOptions } from "./reader.js";
-import type { MarkviewOptions, MarkviewStats, Modifiers, ScrollMode, DocumentCursor, PointerAction } from "./types.js";
+import type { MarkviewOptions, MarkviewStats, Modifiers, ScrollMode, DocumentCursor, PointerAction, SourceRange, SourceGeometry, ScrollAnchors, Heading, Outline } from "./types.js";
 
 export { CanvasReader, LayoutUpdate, Markview };
-export { decodeImage, loadImageUrl } from "./image-loader.js";
+export { FontSet } from "./font-set.js";
+export { Viewer } from "./viewer.js";
+export type { ViewerOptions, ReadingPosition } from "./viewer.js";
 export type { ImagePixels, ImagePriority, ImageRequest, ImageResourceEvent, ResourceOptions } from "./resources.js";
-export type { CanvasReaderOptions, MarkviewOptions, MarkviewStats, Modifiers, ScrollMode, DocumentCursor, PointerAction };
+export type { CanvasReaderOptions, MarkviewOptions, MarkviewStats, Modifiers, ScrollMode, DocumentCursor, PointerAction, SourceRange, SourceGeometry, ScrollAnchors, Heading, Outline };
 export type { FontSource };
 
 /** How `init()` finds the binary and the host's text fonts. */
@@ -24,7 +26,8 @@ export interface InitOptions {
 	 */
 	wasmUrl?: string | URL;
 	/**
-	 * Text fonts shared by every reader. URLs are fetched in parallel; byte
+	 * @deprecated Use `FontSet` and the per-reader `fonts` option.
+	 * Legacy default text fonts shared by readers without an explicit set. URLs are fetched in parallel; byte
 	 * sources are copied into wasm. Omitted means no text fonts are available.
 	 * Only KaTeX fonts are embedded. Supply every face your document needs.
 	 */
@@ -49,7 +52,7 @@ let wasmPromise: Promise<void> | null = null;
  * plain sibling reference survives bundling, and `wasmUrl` covers the case
  * where it does not.
  *
- * @throws when the binary is missing — build it with `scripts/build-web.sh`.
+ * @throws when the binary is missing — build it with `pnpm --dir web build`.
  * @throws when a host font cannot be fetched or is not a valid font file.
  */
 export function init(options?: InitOptions): Promise<void> {
@@ -85,7 +88,7 @@ async function loadWasm(options?: InitOptions): Promise<void> {
 		await __wbg_init({ module_or_path: source as InitInput });
 	} catch (error) {
 		throw new Error(
-			"the Markview wasm module could not be loaded; run scripts/build-web.sh "
+			"the Markview wasm module could not be loaded; run pnpm --dir web build "
 			+ "and make sure markview_web_bg.wasm is served beside the module, or pass "
 			+ `init({ wasmUrl }): ${String(error)}`,
 			{ cause: error },

@@ -1,31 +1,99 @@
 # Fuzzing harness for the Markview libraries
 
-A `cargo-fuzz` + libFuzzer crate (nightly) covering the three library
-crates — `markview-core`, `markview-pdf`, `markview-render` — per
-[`artifacts/fuzzing-plan.md`](../artifacts/fuzzing-plan.md). This directory
-is its own workspace and is deliberately **not** a member of the root
-workspace, so `cargo test`/`cargo dist` at the root never see it.
+A `cargo-fuzz` + libFuzzer crate (nightly) covering the three library crates —
+`markview-core`, `markview-pdf`, `markview-render`. This directory is its own
+workspace and is deliberately **not** a member of the root workspace, so
+`cargo test`/`cargo dist` at the root never see it.
 
-## Targets
+## What the targets look for
 
-| Target | Plan group | Tier | Entry point | Oracle |
-| --- | --- | --- | --- | --- |
-| `parse` | G1 | T1 | `document::parse`, prefix parse, incremental reparse | no panic (O1); budgets (O2) |
-| `reparse` | G1 | T3 | incremental vs full parse | block-for-block equality |
-| `mvss` | G2 | T1+T2 | `Stylesheet::parse` + validation | no panic; bounded values |
-| `layout` | G3 | T1+T2 | `LayoutEngine::layout` | snapshot fields finite/bounded |
-| `layout_diff` | G3 | T3 | normal vs progressive layout | snapshot fingerprint equality |
-| `math` | G4 | T1+T2 | `MathEngine::layout` | no panic; box geometry finite |
-| `highlight` | G5 | T1 | tree-sitter highlight pass | no panic within budgets |
-| `shaping` | G5 | T1+T2 | `TextShaper` metrics + stylesheet validation | advances finite |
-| `fonts` | G5 | T1 | font config over the committed test faces | no panic |
-| `pdf` | G6 | T1+T2 | `markview_pdf::export` | PDF bytes, no panic |
-| `geometry` | G7 | T1+T3 | `markview_render::fuzz_api` primitives | results finite iff inputs are (I7) |
+A target is only worth a slot if it can fail for a reason other than a
+segfault, so every one below carries an **oracle**: a property a correct
+implementation must have, checked against the tree or the output. Tiers follow
+the plan: T1 runs the property in an ordinary build, T2 adds ASAN, T3 compares
+two readings — a fast path against a full one, a cache against a fresh engine,
+a tree against an independent scan of the same bytes.
 
-Tiers follow the plan: T1 = ordinary build, T2 = ASAN (the default
-`cargo fuzz build`), T3 = differential oracles inside the same harness.
+### G1 — parsing and document structure
 
-## Shared machinery (`fuzzlib`)
+- **`parse`** — looks for a panic, an overflow, a budget overrun, or a source
+  range that is unordered or out of bounds. How: one input goes through the full
+  parse, `assert_source_ranges`, the outline / `details_enclosing` / image
+  walks, four prefix cuts, `parse_incremental` and `reparse`, all under one
+  `InputGuard`.
+- **`reparse`** — looks for the incremental fast path disagreeing with a full
+  parse after a deterministic edit. How: both documents are fingerprinted
+  *recursively* — every nested block's range and every inline's kind, style and
+  range — so a shifted nested range is caught even when the rendered text is
+  unchanged. A declined fast path is equal by construction, so the interesting
+  inputs are the ones it accepts.
+- **`prefix`** — looks for `parse_prefix` not being the opening of the full
+  parse. How: six fixed and derived cut points per input; a prefix may truncate
+  its last block, but no earlier block may differ and the last must stay the
+  same construct.
+- **`refdef`** — looks for a reference link resolving differently from what the
+  source declares. How: an independent column-zero scan of the same bytes
+  derives the definition table, and only two directions are asserted — a
+  resolved link must have a definition carrying that destination, and an
+  unresolved one must have no definition at all — so label *spelling* cannot
+  fire it. A second differential appends a definition nothing references and
+  demands every block before it stay identical.
+- **`sourcepos_content`** — looks for a range that is ordered and in bounds yet
+  still not a real place for the node that stores it. How: a containment walk
+  (nested block inside its parent, inline inside its block, cell inline inside
+  the table) plus "a block that reports reading text owns a non-empty range".
+- **`details_structure`** — looks for the `<details>` tree disagreeing with the
+  tags the source wrote. How: the disclosure chain is rebuilt from the tree and
+  compared with `Document::details_enclosing`, and every element's declared
+  `open` is checked against its own opener rather than a sibling's.
+
+### G2–G5 — stylesheets, layout, text
+
+- **`mvss`** — looks for a panic in stylesheet parsing or validation. How:
+  `format_version`, the rule / font / page / svg / mermaid tables and the
+  numeric, URL and digest checks, under budgets; a malformed sheet must return
+  `Err`, never panic.
+- **`layout`** — looks for a panic or non-finite, implausible geometry. How: the
+  whole pipeline (line breaking, paragraphs, microtype, tables, scene) with
+  every `Limits` budget driven toward its floor, and every produced geometry
+  value checked finite and bounded.
+- **`layout_diff`** — looks for the engine answering differently the second
+  time, or a progressive layout disagreeing with a direct one. How: the same
+  document is laid out twice by one engine and once by a fresh engine — all
+  three snapshots must fingerprint equal, so a cache that changes the result is
+  itself a finding. Syntax highlighting runs synchronously for these comparisons
+  because the fingerprints include paint; background colors arriving between
+  passes are an expected change. The document is then laid out progressively,
+  with a prefix snapshot checked block by block (id, position, geometry) against
+  the direct layout.
+- **`math`** — looks for an uncaught panic, an overflow, or non-finite box
+  geometry on the ratex path. How: `MathEngine::layout` under budgets, with a
+  LaTeX-aware mutator keeping the corpus inside macro territory, where the
+  expander's work accounting lives.
+- **`highlight`** — looks for a panic in the syntax pass, reached the way the
+  reader reaches it (a fenced code block inside a layout pass). How: the unit is
+  `language \0 code`; the uncolored fallback is legal, and the detached worker
+  gets its own allocation headroom.
+- **`shaping`** — looks for non-finite advances or offsets. How: parley/swash
+  shaping over arbitrary text and sizes, plus the stylesheet validation the
+  shaper runs on install.
+- **`fonts`** — looks for a panic in font validation. How: arbitrary bytes go
+  through the byte-level checks and the directory scan the shaper performs; a
+  malformed font must degrade to "not a font".
+
+### G6–G7 — export and geometry
+
+- **`pdf`** — looks for two exports of one input differing, or the exported
+  bytes disagreeing structurally with the document they came from. How: export
+  twice and compare bytes, then re-parse with `lopdf` and check page count,
+  well-formedness, page geometry, per-page content, text round-trip and link
+  destinations against the layout, pagination and geometry the export was given.
+- **`geometry`** — looks for a renderer primitive returning a non-finite result
+  from finite inputs (I7). How: the unit is an `arbitrary`-derived struct of raw
+  `f32` bit patterns, and the checks cover intersection, corner/edge fitting and
+  viewport transforms.
+
+## How the oracles are built (`fuzzlib`)
 
 - `allocator.rs` — a counting global allocator. **Declared once, here**
   (`#[global_allocator] pub static GLOBAL`); the [`budget::InputGuard`]
@@ -40,42 +108,81 @@ Tiers follow the plan: T1 = ordinary build, T2 = ASAN (the default
   allocation figure is the *window* peak of live bytes since the guard
   opened (see `allocator.rs`), so a budget-blowing input is caught even
   after a larger earlier input raised the global peak. The per-stage
-  defaults (`Budget::parse/layout/pdf`) are the calibrated numbers in
-  [`artifacts/budget-calibration.md`](../artifacts/budget-calibration.md);
-  re-run `cargo run -p mvfuzz --bin calibrate` after notable changes and
-  update both files together. Campaigns override them via
-  `MARKVIEW_FUZZ_TIME_MS`, `MARKVIEW_FUZZ_ALLOC_BASE_KB`,
-  `MARKVIEW_FUZZ_ALLOC_KB_PER_KB` (B1) — no rebuild. Wall budgets carry
-  a factor of two over the calibrated maximum so a descheduled small
-  input in a parallel campaign does not read as a runaway; the layout
-  allocation figure carries 2.5, because the detached highlight worker's
-  tail can still allocate while the next input's guard is open. The wall
-  budget detects *slow* inputs; a hung one is libFuzzer's `-timeout`'s
-  job, since a post-hoc `finish` check cannot observe a hang.
+  defaults (`Budget::parse/layout/pdf`) are calibrated from representative
+  measurements — high percentile times a safety factor, plus a linear term
+  when the peak grows with input length; `cargo run -p mvfuzz --bin calibrate`
+  re-derives them. Campaigns override them via `MARKVIEW_FUZZ_TIME_MS`,
+  `MARKVIEW_FUZZ_ALLOC_BASE_KB`, `MARKVIEW_FUZZ_ALLOC_KB_PER_KB` (B1) — no
+  rebuild. Wall budgets carry a factor of two over the calibrated maximum so a
+  descheduled small input in a parallel campaign does not read as a runaway; the
+  layout allocation figure carries 2.5, because the detached highlight worker's
+  tail can still allocate while the next input's guard is open. The wall budget
+  detects *slow* inputs; a hung one is libFuzzer's `-timeout`'s job, since a
+  post-hoc `finish` check cannot observe a hang.
 - `pipeline.rs` — shared parse/layout plumbing. `warmup()` runs once per
   process before any layout-family input's guard starts: a fenced code
   block pays fontconfig's cold caches and the syntax-set build, and
   `prewarm_highlight` (a `fuzz`-only markview-core API) pays each
   syntax's one-time parse-state build, so none of that warm-up cost
-  lands on an input's account.
+  lands on an input's account. `export_pdf` supplies a synthetic one-pixel
+  snapshot for every image the layout drew, so an input containing an image
+  reaches the exporter instead of stopping at its "cannot embed image"
+  precondition.
 - `mutators.rs` — structure-aware markdown and MVSS mutators for the text
   targets (line-level edits of headings, lists, fences, tables, math
-  delimiters), with a 1/4 fallback to libFuzzer's own mutation. The
-  `geometry` target instead takes an `arbitrary`-derived struct (F2):
-  every field is an independent `f32` bit pattern.
+  delimiters), with a 1/4 fallback to libFuzzer's own mutation. `math()` is
+  the LaTeX-shaped one, wired into the `math` target through
+  `LLVMFuzzerCustomMutator`: it splices macro fragments
+  (`MATH_MACRO_FRAGMENTS`), wraps and duplicates spans, and edits at TeX's own
+  granularity, because the line-oriented markdown edits read as literal text
+  to the expander. The `geometry` target instead takes an `arbitrary`-derived
+  struct (F2): every field is an independent `f32` bit pattern.
 - `oracle.rs` — finiteness/boundedness assertions, the layout snapshot
   fingerprint (three `DefaultHasher` passes over every geometry field;
   f32s hashed by bit pattern), and the deterministic input-hash helpers
-  the targets share. Layout options **pin the committed test fonts**
-  (`crates/markview-core/tests/fonts`), never the host's font set, so
-  snapshots compare equal across machines.
+  the targets share. `document` fingerprints the whole block tree —
+  nested blocks' source ranges and every inline's kind, style and range —
+  so a reparse that shifts a nested range is caught even when the reading
+  text is unchanged. `assert_source_ranges` walks the document and demands
+  every range be ordered and in bounds; `assert_prefix_consistent` is the
+  `prefix` target's differential (a prefix may truncate its last block, but
+  no earlier one may differ, and the last must stay the same construct).
+  Character boundaries are deliberately not asserted: a `<details>` body and
+  the blocks its closing block spills to the top level are parsed as
+  snippets, so their ranges are snippet-relative by construction. Layout
+  options **pin the committed test fonts** (`crates/markview-core/tests/fonts`),
+  never the host's font set, so snapshots compare equal across machines.
+- `seam.rs` — the structural differentials the `G1` Tier-3 targets share:
+  source ranges against the text they address (`assert_rich_text_covered`
+  and the containment walks), reference resolution against an independent
+  scan of the same bytes (`assert_reference_resolution`), and the `<details>`
+  tags the source wrote against the elements the tree built
+  (`details_elements`, `declared_open`). They need no second implementation,
+  only an input whose two readings disagree.
+- `pdf_oracle.rs` — the `pdf` target's structural readback: the exported
+  bytes are re-parsed and checked against the layout, pagination and geometry
+  the export was given (page count, well-formedness, page geometry, per-page
+  content, text round-trip, link destinations). The text check is a multiset
+  over the code points the pinned faces can draw, and it excludes the
+  character after an undrawable glyph, because `lopdf`'s `/ToUnicode` decoder
+  matches greedily without consulting `codespacerange` — an extractor limit,
+  not an export defect.
+- `ratex.rs` — the `\char` overflow allowance. `ratex-parser` 0.1.14
+  accumulates the argument without a width check, and `libfuzzer-sys` aborts
+  on the panic before the `catch_unwind` in `markview-core` can absorb it, so
+  the four targets that reach ratex call `allow_char_overflow()`, which swaps
+  that one hook for a non-aborting one. Every other panic still aborts, so the
+  oracle stays strict.
+- `probe.rs` — `measure`/`Measured`, so a one-off probe reports the same
+  window-peak allocation `budget::InputGuard` meters; used by
+  `bin/mathprobe` and `bin/warmcheck`.
 
 ## Building and running
 
 ```sh
 cd fuzz
-cargo +nightly fuzz build                       # ASAN (T2)
-cargo +nightly fuzz build --fuzz-target parse   # one target
+cargo +nightly fuzz build                       # ASAN (T2), every target
+cargo +nightly fuzz build parse                 # one target
 cargo +nightly fuzz run parse -- -runs=5000     # brief smoke
 ```
 
@@ -92,65 +199,59 @@ and the built-in MVSS stylesheets into `fuzz/corpus/{parse,math,mvss}/`.
 The script needs network access; corpora are gitignored and rebuilt on
 demand.
 
-## Campaign conventions (R2, R3)
+## Adding an oracle
 
-A campaign is a run of one target long enough to stop finding new
-coverage. Records are requirements, not optional:
+1. Name the property a correct implementation must have, and the reading it
+   can be falsified against. Prefer a second, independent reading (a scan of
+   the source, a fresh engine, a re-parse of the output) over a restatement of
+   the code under test; a differential that mirrors the implementation only
+   tests itself.
+2. Decide what may legally vary. Every oracle here needs a documented escape
+   hatch — a declined fast path, an uncolored fallback, a snippet-relative
+   range — or it will be red from the first corpus replay and bury anything
+   new.
+3. Register the target in `Cargo.toml`, describe it in the table above, and run
+   `fuzz/scripts/guard.sh --full` before spending a campaign on it.
 
-- **Command** (target, flags, `-runs`), **build** (commit +
-  `cargo +nightly fuzz build`), **wall clock** and **CPU time** (the
-  libFuzzer exit summary), **ASAN on/off**, and the **seed corpus state**
-  (output of `prepare_seeds.sh`).
-- Known environment: fontconfig's C library keeps charset caches until
-  process exit, so campaigns run with
-  `ASAN_OPTIONS=detect_leaks=0`; a `LeakSanitizer` report on that is the
-  known cache, not a regression (`artifacts/fuzz-runs/highlight-fontconfig-leak-known`).
-- Crashes and minimized inputs land in `artifacts/fuzz-runs/<target>-<slug>`
-  (the `crash-*`/`leak-*` files libFuzzer writes at the crate root are
-  gitignored; move them into `artifacts/` before the next run).
-- A found bug is: minimized → seeded into the corpus (and, for library
-  bugs, a regression test in the crate) → recorded with attribution
-  (markview vs comrak vs upstream) in `artifacts/fuzz-runs/`.
+## Campaigns
 
-## Findings so far
+A campaign is a run of one target long enough to stop finding new coverage. A
+record is a requirement, not an option, and it holds:
 
-| Input | Target | Finding | Status |
-| --- | --- | --- | --- |
-| `artifacts/fuzz-runs/reparse-lone-cr-duplicate-block` | reparse | A lone `\r` line break desynchronized the sourcepos line table; the degenerate range then duplicated a block across incremental reparse | fixed: `line_starts` follows comrak line endings; incremental falls back to full parse on empty ranges |
-| `artifacts/fuzz-runs/parse-indented-details-closer-oor-range` | parse | An indented `</details>` put the element's source range past the tag (index out of bounds) | fixed: the tag end is measured through the block literal |
-| `artifacts/fuzz-runs/reparse-mid-document-bom-window` | reparse | The parser drops a BOM only at the start of a document; an incremental window opening on a mid-document BOM parsed its first block shorter than a full parse | fixed: a BOM at the window start takes the full parse |
-| `artifacts/fuzz-runs/reparse-4-byte-8a0a0908` | reparse | small control-character document that diverged across the incremental path | seeded; passes with the BOM and empty-range guards |
-| `artifacts/fuzz-runs/reparse-lone-cr-hidden-list-window` | reparse | the fast path walked the source by `\n`-delimited lines, so a list marker behind a mid-line `\r` read as an ordinary line and the window cut through the list's range | fixed: the line, blank-line, and group model follows the parser's `\n`/`\r\n`/`\r` structure |
-| `artifacts/fuzz-runs/geometry-extreme-finite-scaling` | geometry | the oracle demanded the `1e9` bound for finite inputs near the `f32` limit, where pure scaling over it | oracle relaxed: plausible-range operands (≤ `1e6`) owe the bound; near the limit only finiteness |
-| `artifacts/fuzz-runs/geometry-zero-extent-denormal-nan` | geometry | `fit_edges` scaled a denormal pair by `0 / denormal` on a non-positive extent, producing `NaN` | fixed: the scale runs only for a positive extent |
-| `artifacts/fuzz-runs/geometry-clip-subtraction-overflow-*` and `…/geometry-intersect-near-max-overflow` | geometry | finite operands near `f32::MAX` overflow the `x + w` / `height - top` sums to infinity — `f32` semantics, not a bug | oracle accepts infinity below the `1e38` no-overflow line |
-| `artifacts/fuzz-runs/shaping-nan-size` | shaping | same contract for a `NaN` font size | oracle relaxed |
-| `artifacts/fuzz-runs/layout-codeblock-cr-run-newline` | layout / highlight | a code line carried a `\r`, which the shaper classifies as a newline: inside a multi-glyph cluster `parley` asserts `!is_newline` | fixed: code and HTML-source lines split on the parser's `\n`/`\r\n`/`\r` structure before shaping and highlighting |
-| `artifacts/fuzz-runs/shaping-negative-size-inf-width` | shaping | a finite size near the `f32` limit overflows the per-character advance sum to `-inf` — `f32` semantics, not a bug | oracle relaxed: finiteness owed below the no-overflow line, `NaN` still a bug |
-| `artifacts/fuzz-runs/layout-newline-combining-mark-parley-debug-assert` | layout / shaping | `parley`'s `debug_assert!(!is_newline)` fires when a multi-component cluster starts on a line break (break + combining mark); release builds lay the same input out with finite geometry | upstream, seeded; no release impact |
-| `artifacts/fuzz-runs/math-crash-1c7f07` | math / layout / layout_diff / pdf | a `\char` literal wider than `i64::MAX` overflows the accumulator in `ratex-parser` 0.1.14 (`macro_expander.rs:823`, `number = number * (b as i64) + d`); only a build with overflow checks panics, and libFuzzer's abort-on-panic hook turns that caught panic into a campaign abort | upstream: `ratex-parser` 0.1.14, harness-visible only; an allowance restores the `catch_unwind` (`mvfuzz::ratex`) |
-| `artifacts/fuzz-runs/shaping-raw-size-hang` | shaping | a 6-byte input runs CPU-bound without returning (> 5 min, 99 % CPU); the target's post-hoc wall budget cannot observe a hang, so libFuzzer's `-timeout` caught it | fixed: explicitly disable Parley's height ceiling during shaping; finite extreme sizes overflow line height and otherwise yield forever. Reachable through a selected extreme MVSS rule or library parameters, not Markdown alone under bundled themes |
+- **command** (target, flags, `-runs`), **build** (commit plus how the binaries
+  were produced), **wall clock** and **CPU time** (the libFuzzer exit
+  summary), **ASAN on/off**, and the **seed-corpus state** (what
+  `prepare_seeds.sh` produced).
+- Known environment: fontconfig's C library keeps charset caches until process
+  exit, so campaigns run with `ASAN_OPTIONS=detect_leaks=0`, and a
+  `LeakSanitizer` report on that cache is not a regression.
+- Corpus and campaign records are generated artifacts and stay outside version
+  control. libFuzzer also drops `crash-*`/`leak-*` files in the crate root when
+  a run dies; move them out of the tree before the next run.
+- A found bug's path: minimize it, seed the minimized input into the corpus
+  (and, for a library bug, add a regression test in the crate), and attribute it
+  (markview vs comrak vs another upstream). An input that only trips an oracle
+  needs the same attribution before it is worth a record.
 
-### Upstream `\char` overflow (harness allowance)
+`fuzz/scripts/` carries the slot allocator and the drivers a long campaign runs
+through:
 
-`ratex-parser` 0.1.14 accumulates the `\char` argument into an `i64`
-without a width check (`macro_expander.rs:823`). With overflow checks on
-— this profile, and `cargo-fuzz`'s default `-Cdebug-assertions` — a
-literal at or past `i64::MAX` panics; the reader's release profile has
-them off, where the multiply wraps into a negative `\@char` code point
-that fails to parse, so `MathEngine::layout` returns `Err` either way
-(pinned by `overlong_char_literal_is_an_error_not_a_crash`). It still
-aborts a campaign, because `libfuzzer-sys` installs a panic hook that
-calls `abort()` before unwinding, which the `catch_unwind` in
-`crates/markview-core/src/math.rs` cannot prevent.
-
-`mvfuzz::ratex::allow_char_overflow` swaps that hook for one that lets
-exactly this panic — this file, this message — unwind, so the existing
-`catch_unwind` absorbs it; every other panic still aborts, so the oracle
-stays strict. The four targets that reach ratex call it (`math` directly;
-`layout`, `layout_diff`, and `pdf` through a laid-out formula). A
-byte-level skip would be the smaller-looking concession, but the literal
-can be assembled from a macro or across a comment, so only the panic
-itself marks the class. Delete the module and its call sites once the
-dependency is fixed or bumped.
-
+- `slot.sh` — eight flock-protected slots, one per P-core logical CPU,
+  `taskset`-pinned and RSS-capped through `rsscap.sh`. `--list`, `--wait`
+  (block for a slot), `--try` (run only if one is free); `FUZZ_SLOT_DIR` moves
+  the lock directory.
+- `rsscap.sh` — an RSS watchdog for the command it wraps: a process that grows
+  past the limit is killed, so a runaway fuzzer dies instead of taking the
+  machine down. A virtual-address cap (`ulimit -v`) is **not** usable here:
+  ASAN reserves terabytes of shadow address space, so a sanitized binary would
+  abort before `main`.
+- `campaign.sh <target> <seconds>` — one bounded run: slot, pin, RSS ceiling,
+  libFuzzer flags, and a self-contained record (command line, binary mtime,
+  corpus state, exit summary, peak RSS) written next to the run's log. The
+  record root is `out` at the top of the script. Fuzzing runs in fork mode with
+  `-keep_seed`, so a crash libFuzzer reports mid-block does not end it and the
+  block still honours `-max_total_time` on an accumulated corpus.
+- `campaign-supervisor.sh <hours>` — a fill loop that keeps every slot busy
+  from a priority-ordered rotation for the given window, then drains.
+- `guard.sh` — `cargo check -p mvfuzz` before a campaign starts (`--full` adds
+  every target), so a broken shared library cannot waste a slot.

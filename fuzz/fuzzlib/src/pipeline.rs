@@ -14,6 +14,7 @@ use std::{
 use markview_core::{
 	document,
 	fonts::FontConfig,
+	image::ImageSnapshot,
 	layout::{LayoutEngine, LayoutOptions, LayoutSnapshot},
 	paginate::{PageGeometry, Pagination, paginate},
 	style::{CjkType, Stylesheet},
@@ -58,6 +59,15 @@ pub fn options_for(md: &str) -> LayoutOptions {
 		fonts: pinned_fonts(),
 		..Default::default()
 	}
+}
+
+/// Completes syntax colors before the first snapshot, so differential
+/// fingerprints compare the same highlight state regardless of scheduling.
+pub fn differential_engine() -> LayoutEngine {
+	LayoutEngine::with_executor(
+		Arc::new(markview_core::background::Direct),
+		Arc::new(|| {}),
+	)
 }
 
 /// One layout of a throwaway document, run once per process: the first
@@ -136,9 +146,10 @@ pub fn export_pdf(
 		snapshot = engine.layout(&document, &options);
 	}
 	let pagination = paginate(&document, &snapshot, &geometry);
+	let images = synthetic_images(&snapshot);
 	let bytes = markview_pdf::export(Export {
 		snapshot: &snapshot,
-		images: &Default::default(),
+		images: &images,
 		prepared_images: None,
 		stylesheet: &sheet,
 		geometry: &geometry,
@@ -154,4 +165,58 @@ pub fn export_pdf(
 	})
 	.expect("the export succeeds");
 	(bytes, document, snapshot, pagination, geometry)
+}
+
+/// A decoded 1×1 image for every source the layout drew, so an export of a
+/// document that contains images reaches the image path instead of failing
+/// there.
+///
+/// The reader supplies decoded pixels and precompressed resources; the harness
+/// has neither, and `markview_pdf::export` correctly refuses to write a
+/// document whose image it cannot embed. Without this, every input containing
+/// an image aborts the target at the exporter's own precondition — the
+/// `![alt](url)` shape the mutator produces constantly — and the export path
+/// behind it is never exercised. The image's content is not what the PDF
+/// oracles check; its presence on the page is.
+fn synthetic_images(snapshot: &LayoutSnapshot) -> ImageSnapshot {
+	use markview_core::image::{ImageInfo, ImagePixels, Pixels};
+
+	let sources: std::collections::HashSet<&str> = snapshot
+		.blocks
+		.iter()
+		.flat_map(|block| block.layout.draws.iter())
+		.filter_map(|draw| match draw {
+			markview_core::scene::Draw::Image { src, .. } => Some(src.as_str()),
+			_ => None,
+		})
+		.collect();
+	if sources.is_empty() {
+		return ImageSnapshot::default();
+	}
+	let pixels = Arc::new(ImagePixels::default());
+	let mut entries = std::collections::HashMap::new();
+	for src in sources {
+		entries.insert(
+			src.to_owned(),
+			ImageInfo {
+				version: 0,
+				size: Some((1, 1)),
+				error: None,
+			},
+		);
+		pixels.insert(
+			src.to_owned(),
+			0,
+			Arc::new(Pixels {
+				width: 1,
+				height: 1,
+				rgba: Arc::from([0u8, 0, 0, 255].as_slice()),
+			}),
+		);
+	}
+	ImageSnapshot {
+		generation: 0,
+		entries,
+		pixels,
+	}
 }

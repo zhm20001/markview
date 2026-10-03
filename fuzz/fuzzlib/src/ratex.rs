@@ -15,9 +15,8 @@
 //! puts `catch_unwind` back in service; every other panic still aborts, so
 //! the oracle stays strict.
 //!
-//! The artefact is `artifacts/fuzz-runs/math-crash-1c7f07`; the class reaches
-//! `math`, `layout`, `layout_diff`, and `pdf`. Delete this module and its
-//! call sites once the dependency is fixed or bumped.
+//! The class reaches `math`, `layout`, `layout_diff`, and `pdf`. Delete this
+//! module and its call sites once the dependency is fixed or bumped.
 
 use std::sync::Once;
 

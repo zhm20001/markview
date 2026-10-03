@@ -24,9 +24,12 @@ If any of these preconditions are not met, stop and report the problem to the us
    `package.json` versions to the same release version; skip private packages.
    Then run `pnpm --dir web install --lockfile-only --offline` to refresh the pnpm lockfile if needed.
 2. **Changelog.** Directly under `## Unreleased` in `CHANGELOG.md`, insert
-   `## <version> - <YYYY-MM-DD>` (today's date from `date`) and a one- or two-line summary of
-   the release. Leave `## Unreleased` in place and empty. cargo-dist takes the H2 whose version
-   matches the tag as the GitHub Release title and body, so keep it bracket-free and unique.
+   `## <version> - <YYYY-MM-DD>` (today's date from `date`) followed by a `**Highlights**`
+   list in the house style below. Leave `## Unreleased` in place and empty. cargo-dist takes
+   the H2 whose version matches the tag as the GitHub Release title and body, so keep it
+   bracket-free and unique. Reflow the release's own entries, being careful not to move the
+   entries the `## Unreleased` section keeps: on the way in, `## Unreleased` stays directly
+   above the new H2.
 3. **Verify.** `cargo fmt --all --check`, then
    `cargo clippy --workspace --locked --all-targets -- -D warnings`, then
    `cargo test --workspace --locked --all-targets`. Confirm the announcement with
@@ -39,6 +42,40 @@ If any of these preconditions are not met, stop and report the problem to the us
    `Packaging` and cross-platform checks → GitHub Release with every asset), plus `CI` and
    `Packages`. Watch with `gh run watch <id> --exit-status` and check the release page exists.
    The workflow verifies the assets, so do not download them to re-check checksums.
+
+## Release notes style
+
+Every release section from `0.1.11` on opens with a `**Highlights**` bullet list instead of a
+summary paragraph. Entries before `0.1.11` keep their existing prose openers; do not rewrite them.
+
+```markdown
+## 0.1.11 - 2026-10-03
+
+**Highlights**:
+
+- Start a search with `/` and jump straight to the next match.
+- Refined touchpad and wheel scrolling.
+- New setting for singleton mode.
+
+### Added
+```
+
+Rules:
+
+- Write for users, not developers. Name what a reader can now do or no longer suffers, not the
+  module, oracle, target or script that changed. Fuzzing, campaign tooling, packaging and CI work
+  belongs in the body: mention it only when it changes what a user can install or run.
+- Keep 4 to 6 bullets, one line each. More than that means the body should carry the rest.
+- Use one consistent voice across the list. Telegraphic noun phrases (`Refined ...`) and
+  imperatives (`Start ...`) both work, but do not mix them with third-person `Fixes ...` lines.
+- Drop filler such as "experience" and "improvements"; state the change or its payoff.
+- Cite issue numbers in the body, not in the highlights.
+- Do not advertise distribution or features that are not live yet. A pending upstream submission
+  (e.g. a first-time WinGet registration) is not a highlight.
+- Avoid the bare word "security" unless the release fixes a genuine vulnerability; use
+  "robustness and security hardening" when it covers both.
+- Keep the colon on `**Highlights**:`, one blank line before the first bullet, and one blank line
+  after the list before the next `###` heading, so GitHub and the release body render the list.
 
 ## Invariants
 

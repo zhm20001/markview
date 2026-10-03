@@ -7,7 +7,7 @@
 //! maximum times a safety factor, rounded up; the record lists the inputs,
 //! this machine, and the date so the numbers stay auditable.
 //!
-//! Run: `cargo run -p mvfuzz --bin calibrate -- --out artifacts/budget-calibration.md`
+//! Run: `cargo run -p mvfuzz --bin calibrate -- --out <path>`
 
 use std::{
 	env, fs,

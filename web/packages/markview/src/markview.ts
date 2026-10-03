@@ -3,9 +3,11 @@
 // parses the JSON once and hands out `MarkviewStats`.
 
 import { Markview as WasmMarkview, create as wasmCreate } from "../wasm/markview_web.js";
+import { fontHandle } from "./font-handles.js";
+import type { FontSet } from "./font-set.js";
 import { ResourceEvents, type ResourceOptions } from "./resources.js";
 import { LayoutUpdate } from "./layout-update.js";
-import type { MarkviewOptions, MarkviewStats, Modifiers, ScrollMode, DocumentCursor, PointerAction } from "./types.js";
+import type { MarkviewOptions, MarkviewStats, Modifiers, ScrollMode, DocumentCursor, PointerAction, SourceGeometry, ScrollAnchors, Outline } from "./types.js";
 import { parseStats, serializeOptions } from "./internal.js";
 
 /**
@@ -31,10 +33,10 @@ export class Markview {
 	}
 
 	/** Builds a handle that draws into `canvas`, importing `options`. */
-	static async create(canvas: HTMLCanvasElement, options?: MarkviewOptions, resources?: ResourceOptions): Promise<Markview> {
+	static async create(canvas: HTMLCanvasElement, options?: MarkviewOptions, resources?: ResourceOptions, fonts?: FontSet): Promise<Markview> {
 		// A handle created before any frame will size itself on the first
 		// `resize()`; nothing else needs to happen here.
-		const handle = await wasmCreate(canvas, serializeOptions(options));
+		const handle = await wasmCreate(canvas, serializeOptions(options), fonts ? fontHandle(fonts) : undefined);
 		return new Markview(handle, resources);
 	}
 
@@ -91,6 +93,23 @@ export class Markview {
 		if (reflowed) this.#supersede();
 		return reflowed;
 	}
+
+	/** Complete outline of the newest parsed document, including hidden headings. */
+	outline(): Outline { return JSON.parse(this.#live().outline()) as Outline; }
+	/** Returns `null` until this source position has current-version geometry. */
+	sourceToPreview(offset: number): SourceGeometry | null {
+		return JSON.parse(this.#live().sourceToPreview(Math.max(0, Math.trunc(normalize(offset))))) as SourceGeometry | null;
+	}
+	/** Batches visible source-line geometry from the current publication. */
+	scrollAnchors(previous?: ScrollAnchors): ScrollAnchors {
+		return JSON.parse(this.#live().scrollAnchors(previous?.pass ?? undefined, previous?.blocks ?? 0)) as ScrollAnchors;
+	}
+	/** Maps document CSS pixels to the closest visible source line. */
+	previewToSource(y: number): SourceGeometry | null {
+		return JSON.parse(this.#live().previewToSource(normalize(y))) as SourceGeometry | null;
+	}
+	/** Opens enclosing disclosures and waits for unpublished heading geometry. */
+	navigateHeading(anchor: string): boolean { return this.#live().navigateHeading(anchor); }
 
 	/** Sets the document scroll in logical pixels. */
 	setScroll(y: number): void {
@@ -214,6 +233,14 @@ export class Markview {
 		// Relaying out cancels the pending pass, so it supersedes it too.
 		this.#supersede();
 		this.#live().setConfig(serializeOptions(options));
+	}
+
+	/** Replaces faces through ordinary budgeted reflow. */
+	setFonts(fonts: FontSet): void {
+		const handle = this.#live();
+		const faces = fontHandle(fonts);
+		this.#supersede();
+		handle.setFonts(faces);
 	}
 
 	/** Releases the wasm handle. Later calls throw. */

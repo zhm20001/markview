@@ -25,6 +25,8 @@ export interface MarkviewOptions {
 
 /** The engine's counters, as returned by every stats read-back. */
 export interface MarkviewStats {
+	/** Changes only when Markdown source is replaced. */
+	documentVersion: number;
 	/** Bumped on every published snapshot. */
 	revision: number;
 	/** Blocks in the published snapshot. */
@@ -68,3 +70,26 @@ export type ScrollMode = "external" | "internal";
 export type DocumentCursor = "default" | "text" | "pointer";
 /** An activation emitted on release, after a press that did not drag. */
 export type PointerAction = { kind: "document"; reflowed: boolean } | { kind: "link" | "image"; target: string; modifiers: Modifiers };
+
+/** Zero-based, half-open UTF-16 source range in the original string. */
+export interface SourceRange { start: number; end: number; }
+/** Document CSS pixels, independent of viewport scroll. */
+export interface SourceGeometry {
+	documentVersion: number;
+	revision: number;
+	source: SourceRange;
+	rect: { x: number; y: number; width: number; height: number };
+}
+/** Visible source-line extents collected in one published geometry traversal. */
+export interface ScrollAnchors {
+	documentVersion: number;
+	revision: number;
+	/** A progressive layout pass; `null` for a publication that cannot extend. */
+	pass: string | null;
+	/** Previously returned blocks reused by this batch; zero resets the anchors. */
+	fromBlock: number;
+	blocks: number;
+	anchors: { source: SourceRange; top: number; bottom: number }[];
+}
+export interface Heading { text: string; level: number; anchor: string; source: SourceRange; }
+export interface Outline { documentVersion: number; entries: Heading[]; }

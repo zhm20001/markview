@@ -197,6 +197,12 @@ impl<P: SendEvent> App<P> {
 		bottom(self.readers.session.search.open)
 	}
 	pub(super) fn open_search(&mut self) {
+		self.open_search_with(false);
+	}
+	pub(super) fn open_new_search(&mut self) {
+		self.open_search_with(true);
+	}
+	fn open_search_with(&mut self, fresh: bool) {
 		if self.interaction.modal.is_some()
 			|| self.readers.session.path.is_none()
 		{
@@ -205,7 +211,15 @@ impl<P: SendEvent> App<P> {
 		self.clear_input_focus();
 		self.interaction.show_panel(PanelPage::Closed);
 		self.readers.session.search.open = true;
-		if let Some(selection) = self.interaction.selection {
+		if fresh {
+			let search = &mut self.readers.session.search;
+			search.input.set_text(&mut self.ui, "");
+			search.query.clear();
+			search.matches = Arc::default();
+			search.current = None;
+			search.retained = None;
+			self.search_changed();
+		} else if let Some(selection) = self.interaction.selection {
 			let session = &mut self.readers.session;
 			let text = session
 				.snapshot

@@ -954,7 +954,8 @@ fn a_details_body_with_a_lone_carriage_return_keeps_its_ranges() {
 	let (_, _, blocks) = details(&doc);
 	assert_eq!(blocks.len(), 2);
 	assert_eq!(
-		blocks[1].source.start, 8,
+		blocks[1].source.start,
+		doc.source.find("Second").unwrap(),
 		"the second block starts after the lone \\r line"
 	);
 }
@@ -1162,8 +1163,8 @@ fn a_details_body_resolves_document_wide_footnotes() {
 		panic!("expected the second note")
 	};
 	assert_eq!(label, "2");
-	// A note the body declares stays inside the disclosure, and a reference
-	// outside it resolves to that note.
+	// A note the body declares appears once at the end of the document,
+	// and a reference outside it resolves to that note.
 	let doc = parse(
 		"Outside[^n]\n\n<details>\n<summary>Note</summary>\n\n[^n]: Declared in the body.\n\n</details>\n",
 	);
@@ -1178,7 +1179,8 @@ fn a_details_body_resolves_document_wide_footnotes() {
 	let BlockKind::Details { blocks, .. } = &doc.blocks[1].kind else {
 		panic!("expected the details element")
 	};
-	let BlockKind::Footnote { label, .. } = &blocks[0].kind else {
+	assert!(blocks.is_empty());
+	let BlockKind::Footnote { label, .. } = &doc.blocks[2].kind else {
 		panic!("expected the declared note")
 	};
 	assert_eq!(label, "1");
@@ -1245,12 +1247,12 @@ fn details_enclosing_names_the_containers_of_a_hidden_anchor() {
 }
 
 #[test]
-fn details_enclosing_reaches_a_footnote_definition_in_a_hidden_body() {
+fn a_footnote_defined_in_details_has_no_disclosure_chain() {
 	let doc = parse(
 		"<details>\n<summary>More</summary>\n\nBody[^a].\n\n[^a]: Note.\n\n</details>\n",
 	);
 	// The definition is labelled by its index, as the reference is.
-	assert_eq!(doc.details_enclosing("fn:1"), [doc.blocks[0].id]);
+	assert!(doc.details_enclosing("fn:1").is_empty());
 }
 
 #[test]

@@ -22,7 +22,7 @@ fuzz_target!(|data: &[u8]| {
 	let budget = budget::Budget::parse().from_env();
 	let md = String::from_utf8_lossy(data).into_owned();
 	let len = md.len();
-	if len < 2 || len > 256 * 1024 {
+	if !(2..=256 * 1024).contains(&len) {
 		return;
 	}
 	let guard = budget::InputGuard::new();

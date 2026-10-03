@@ -6,5 +6,8 @@ pub mod budget;
 pub mod edit;
 pub mod mutators;
 pub mod oracle;
+pub mod pdf_oracle;
 pub mod pipeline;
+pub mod probe;
 pub mod ratex;
+pub mod seam;

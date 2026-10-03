@@ -3,6 +3,7 @@
 // device-pixel-ratio sizing, the wheel/pointer/keyboard bindings and
 // `Ctrl`/`Cmd`+`C` copying.
 
+import type { FontSet } from "./font-set.js";
 import type { ResourceOptions } from "./resources.js";
 import { LayoutUpdate } from "./layout-update.js";
 import { Markview } from "./markview.js";
@@ -10,6 +11,10 @@ import type { MarkviewOptions, MarkviewStats, Modifiers, ScrollMode } from "./ty
 
 /** Options for `CanvasReader.attach`; every key is optional. */
 export interface CanvasReaderOptions {
+	/** Explicit per-instance text faces; reusable across readers. */
+	fonts?: FontSet;
+	/** Fires before pointer, wheel or navigation-key input takes ownership. */
+	onUserInput?: () => void;
 	/** Document laid out progressively when the reader attaches. */
 	markdown?: string;
 	/** Options handed to the engine. */
@@ -91,6 +96,9 @@ export class CanvasReader {
 			canvas.tabIndex = 0;
 			this.madeFocusable = true;
 		}
+		for (const name of ["pointerdown", "wheel", "keydown"] as const) {
+			canvas.addEventListener(name, () => options.onUserInput?.(), { capture: true, signal: this.listeners.signal });
+		}
 		this.bindInput();
 		if (options.markdown !== undefined) {
 			this.setMarkdown(options.markdown);
@@ -111,7 +119,7 @@ export class CanvasReader {
 		const resources = { ...options.resources };
 		const onError = resources.onError ?? options.onError;
 		if (onError) resources.onError = onError;
-		const markview = await Markview.create(canvas, options.markview, resources);
+		const markview = await Markview.create(canvas, options.markview, resources, options.fonts);
 		return new CanvasReader(markview, canvas, options, pinnedBox);
 	}
 

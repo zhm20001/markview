@@ -14,11 +14,11 @@
 //! `finish` cannot observe a hang, so libFuzzer's `-timeout` is the hang
 //! backstop.
 //!
-//! The per-stage defaults come from the calibration record in
-//! `artifacts/budget-calibration.md` (method per B2: high percentile of
-//! representative-input measurements times a safety factor, plus a linear
-//! term when the peak grows with input length). Long campaigns may override
-//! them through the `MARKVIEW_FUZZ_*` environment variables (B1).
+//! The per-stage defaults are calibrated from representative-input
+//! measurements: the high percentile times a safety factor, plus a linear
+//! term when the peak grows with input length (`cargo run -p mvfuzz --bin
+//! calibrate` re-derives them). Long campaigns may override them through the
+//! `MARKVIEW_FUZZ_*` environment variables (B1).
 
 use std::time::Instant;
 
@@ -122,6 +122,41 @@ pub struct InputGuard {
 	alloc_base: u64,
 }
 
+impl InputGuard {
+	pub fn new() -> Self {
+		// Opening a window both snapshots the live baseline (what was
+		// already resident before this input is not its fault) and resets
+		// the window peak, so this input is metered on its own
+		// transient high-water mark, not the process-global one.
+		Self {
+			start: Instant::now(),
+			alloc_base: GLOBAL.open_window(),
+		}
+	}
+	pub fn finish(self, budget: &Budget, input_bytes: usize) {
+		let elapsed = self.start.elapsed();
+		if elapsed.as_millis() > u128::from(budget.time_ms) {
+			panic!(
+				"wall budget: {elapsed:?} for a {input_bytes}-byte input exceeds {budget:?}"
+			);
+		}
+		let spent = GLOBAL.window_peak().saturating_sub(self.alloc_base);
+		let limit = budget.alloc_limit(input_bytes);
+		if spent > limit {
+			panic!(
+				"allocation budget: one {input_bytes}-byte input grew live memory by \
+				 {spent} bytes, allowance {limit}"
+			);
+		}
+	}
+}
+
+impl Default for InputGuard {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -176,40 +211,5 @@ mod tests {
 			},
 			chunk.len(),
 		);
-	}
-}
-
-impl InputGuard {
-	pub fn new() -> Self {
-		// Opening a window both snapshots the live baseline (what was
-		// already resident before this input is not its fault) and resets
-		// the window peak, so this input is metered on its own
-		// transient high-water mark, not the process-global one.
-		Self {
-			start: Instant::now(),
-			alloc_base: GLOBAL.open_window(),
-		}
-	}
-	pub fn finish(self, budget: &Budget, input_bytes: usize) {
-		let elapsed = self.start.elapsed();
-		if elapsed.as_millis() > u128::from(budget.time_ms) {
-			panic!(
-				"wall budget: {elapsed:?} for a {input_bytes}-byte input exceeds {budget:?}"
-			);
-		}
-		let spent = GLOBAL.window_peak().saturating_sub(self.alloc_base);
-		let limit = budget.alloc_limit(input_bytes);
-		if spent > limit {
-			panic!(
-				"allocation budget: one {input_bytes}-byte input grew live memory by \
-				 {spent} bytes, allowance {limit}"
-			);
-		}
-	}
-}
-
-impl Default for InputGuard {
-	fn default() -> Self {
-		Self::new()
 	}
 }

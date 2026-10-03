@@ -43,6 +43,13 @@ Download the latest build from [Releases](https://github.com/szdytom/markview/re
 | Windows | `.msi`, `.zip` |
 | macOS | zipped `.app` bundle |
 
+Once the [WinGet community submission](https://github.com/microsoft/winget-pkgs/pull/445697) is accepted, Windows users can install and update it with:
+
+```powershell
+winget install --id szdytom.Markview --exact --source winget
+winget upgrade --id szdytom.Markview --exact --source winget
+```
+
 On Linux and macOS the install script does the same thing:
 
 ```sh
@@ -190,6 +197,9 @@ recently used entries dropped first, and is cleared by deleting that directory.
 | Keys | Action |
 |:--|:--|
 | `Ctrl+O` | Open a file |
+| `/` | Start an empty document search |
+| `Ctrl+F` | Find the selection or reopen the previous query |
+| `Enter` / `Shift+Enter`, `F3` / `Shift+F3` | Next or previous search result |
 | `Ctrl+B` | Open the table of contents |
 | `Ctrl+T` | Choose a stylesheet |
 | `Ctrl+E` | Export the document |
@@ -365,6 +375,8 @@ one.
 | [Architecture](docs/architecture.md) | The boundaries the implementation preserves |
 | [Security and threat model](docs/security.md) | What an untrusted document can reach |
 | [Development guide](docs/development.md) | Building, testing and changing behavior |
+
+The separate [Web components](docs/mvaac.md) provide a framework-independent WASM viewer and CodeMirror split editor. Web editing belongs to that package; the native application remains read-only.
 
 ## Development
 

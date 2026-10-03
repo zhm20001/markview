@@ -40,6 +40,42 @@ fn event(app: &mut App<Proxy>, event: WindowEvent) {
 }
 
 #[test]
+fn slash_is_literal_text_in_export_and_search_inputs() {
+	let mut app = app();
+	let slash = Key::Character("/".into());
+	assert_eq!(app.input_key(&slash, Some("/")), Outcome::Consumed);
+	assert_eq!(app.readers.session.export_title.text(), "/");
+	assert!(!app.readers.session.search.open);
+	app.readers.session.path = Some("search.md".into());
+	app.open_search();
+	assert_eq!(app.input_key(&slash, Some("/")), Outcome::Consumed);
+	assert_eq!(app.readers.session.search.input.text(), "/");
+	assert!(app.readers.session.search.open);
+}
+
+#[test]
+fn slash_followed_by_typing_starts_a_new_query() {
+	let mut app = app();
+	app.readers.session.path = Some("search.md".into());
+	app.interaction.show_panel(PanelPage::Closed);
+	app.readers
+		.session
+		.search
+		.input
+		.set_text(&mut app.ui, "old");
+	assert!(app.key_pressed(&Key::Character("/".into())));
+	for c in "foobar".chars() {
+		let text = c.to_string();
+		assert_eq!(
+			app.input_key(&Key::Character(text.clone().into()), Some(&text)),
+			Outcome::Consumed
+		);
+	}
+	assert!(app.readers.session.search.open);
+	assert_eq!(app.readers.session.search.input.text(), "foobar");
+}
+
+#[test]
 fn form_focus_routes_typing_ime_and_tab_without_document_shortcuts() {
 	let mut app = app();
 	assert_eq!(

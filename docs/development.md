@@ -136,12 +136,12 @@ signs, hearts, © and ™ stay with the reading font; if no text candidate cover
 one of those, the Emoji face is still the last resort.
 
 When no configured face covers a cluster/word, a `WARN` line on stderr reports its
-Unicode codes, requested candidates and available exact faces before handing it to
+Unicode codes, requested candidates and available faces before handing it to
 Parley. Normal selection of a later configured candidate is silent. Warnings are
 limited to one per candidate set (including requested weight), at most 64 per text
 shaper, and survive reflow/stylesheet resets. Internal object placeholders are
 excluded. To exercise warnings, use a temporary custom style with unavailable font
-families or an Emoji candidate inheriting weight 700; verify repeated reflows stay
+families and a character those fonts cannot draw; verify repeated reflows stay
 quiet.
 
 The reader and the core crate log through the `log` facade, and the binary writes

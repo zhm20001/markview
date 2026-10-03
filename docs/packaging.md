@@ -136,6 +136,54 @@ dist build --artifacts=local --target x86_64-unknown-linux-gnu
 require a Windows host, macOS archives require macOS, and the `.deb` and
 AppImage need `dpkg-deb` and `appimagetool`, which is why CI owns them.
 
+## WinGet distribution
+
+The package identifier is `szdytom.Markview`. Once the initial submission is
+merged into [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs),
+Windows users can install and upgrade the machine-wide MSI with:
+
+```powershell
+winget install --id szdytom.Markview --exact --source winget
+winget upgrade --id szdytom.Markview --exact --source winget
+```
+
+`packaging/winget/0.1.10/` holds the initial submission, using the SHA-256,
+product code and upgrade code from the published MSI. It is a release snapshot,
+not a template for newly built MSIs: WiX generates a new product code each build.
+CI validates it with `winget validate`, installs the published MSI through
+`winget install --manifest`, runs the installed executable, then uninstalls it.
+To run the same check locally, use an elevated PowerShell on a clean Windows
+machine with WinGet installed:
+
+```powershell
+./scripts/verify_winget_package.ps1
+```
+
+After a stable release is published, `.github/workflows/winget.yml` uses the
+pinned Microsoft WinGetCreate tool to update the community manifest from the
+public MSI URL. WinGetCreate downloads and inspects the installer to refresh
+its hash and product metadata. The result is saved as a `winget-<version>`
+workflow artifact. Until the initial community submission is merged, the
+workflow reports a notice and successfully skips the update. GitHub releases
+can continue at their usual pace. Prereleases are skipped.
+
+Keep the initial submission on its tested release while it is reviewed. After
+it merges, manually run the `WinGet` workflow for the latest stable tag; there
+is no need to submit every intermediate version. Subsequent stable releases
+then use the normal update workflow.
+
+For automatic update PRs, configure a repository secret named `WINGET_TOKEN`
+with a dedicated GitHub classic personal access token with `public_repo`
+scope, as described in [WinGetCreate's token guide](https://github.com/microsoft/winget-create/blob/main/doc/token.md).
+Without the secret, registered packages still produce the manifest artifact for
+manual submission. The release's built-in `GITHUB_TOKEN` only reads metadata; it cannot
+submit PRs to Microsoft's repository. A maintainer can also rerun the `WinGet`
+workflow manually with a published stable tag, for example `v0.1.11`.
+
+Community validation and review happen after submission, so a GitHub release
+may be available before `winget upgrade` offers it. Do not replace a published
+MSI after submission: WinGet verifies the manifest's SHA-256 when downloading.
+
 ## Runtime requirements
 
 The Linux artifacts rely on host components on purpose: bundling glibc is the

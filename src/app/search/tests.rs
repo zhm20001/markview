@@ -111,6 +111,85 @@ impl Harness {
 	}
 }
 #[test]
+fn slash_opens_empty_search_without_using_selection_or_previous_results() {
+	use winit::keyboard::Key;
+	let mut h = Harness::new("needle");
+	let slash = Key::Character("/".into());
+	assert!(h.app.key_pressed(&slash));
+	h.settle();
+	assert!(h.app.readers.session.search.open);
+	assert!(h.app.readers.session.search.input.text().is_empty());
+	assert_eq!(
+		h.app.interaction.focus,
+		Some(Command::FocusInput(TextField::Search))
+	);
+	for already_open in [false, true] {
+		h.query("needle");
+		h.app.navigate_search(false);
+		h.settle();
+		assert_eq!(h.app.readers.session.search.current, Some(0));
+		if !already_open {
+			h.app.close_search();
+		}
+		let selection = h.app.readers.session.snapshot.select_all(1);
+		h.app.interaction.selection = selection;
+		h.app.readers.session.search.retained =
+			Some(h.app.readers.session.search.matches[0].clone());
+		assert!(h.app.key_pressed(&slash));
+		let search = &h.app.readers.session.search;
+		assert!(search.open);
+		assert!(search.input.text().is_empty());
+		assert!(search.query.is_empty());
+		assert!(search.matches.is_empty());
+		assert_eq!(search.current, None);
+		assert_eq!(search.retained, None);
+		assert_eq!(h.app.interaction.selection, selection);
+		h.settle();
+		assert!(h.app.readers.session.search.matches.is_empty());
+		h.app.interaction.selection = None;
+	}
+}
+
+#[test]
+fn slash_respects_panels_modals_and_modifier_chords() {
+	use crate::state::Modal;
+	use winit::keyboard::{Key, ModifiersState};
+	let mut h = Harness::new("needle");
+	let slash = Key::Character("/".into());
+	for modifiers in [
+		ModifiersState::CONTROL,
+		ModifiersState::SUPER,
+		ModifiersState::ALT,
+	] {
+		h.app.interaction.modifiers = modifiers;
+		assert!(!h.app.key_pressed(&slash));
+		assert!(!h.app.readers.session.search.open);
+	}
+	h.app.interaction.modifiers = ModifiersState::empty();
+	for panel in [
+		PanelPage::Settings(crate::state::PanelTab::Generic),
+		PanelPage::Export,
+	] {
+		h.app.interaction.show_panel(panel);
+		assert!(h.app.key_pressed(&slash));
+		assert!(!h.app.readers.session.search.open);
+	}
+	h.app.interaction.show_panel(PanelPage::Closed);
+	h.app.interaction.modal = Some(Modal::OpenLocal {
+		path: "file.txt".into(),
+		dir: ".".into(),
+		document_dir: None,
+	});
+	h.app.key_pressed(&slash);
+	assert!(!h.app.readers.session.search.open);
+	assert!(h.app.interaction.modal.is_some());
+	h.app.interaction.modal = None;
+	h.app.readers.session.path = None;
+	h.app.key_pressed(&slash);
+	assert!(!h.app.readers.session.search.open);
+}
+
+#[test]
 fn opening_search_uses_document_selection_and_submits_it() {
 	let mut h = Harness::new("选中文字");
 	for already_open in [false, true] {

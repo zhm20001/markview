@@ -41,6 +41,10 @@ fn candidates_have_independent_real_faces_and_cluster_coverage() {
 			..Default::default()
 		},
 	);
+	let appearance = TextAppearance {
+		weight: 600,
+		..appearance
+	};
 	let latin = s.choose_font("a", &appearance).unwrap();
 	assert_eq!(latin.family, "Primary");
 	assert_eq!(latin.style, FontStyle::Italic);
@@ -99,7 +103,7 @@ fn candidates_have_independent_real_faces_and_cluster_coverage() {
 	}
 }
 #[test]
-fn unavailable_variant_weight_and_family_are_skipped() {
+fn unavailable_variant_and_family_are_skipped_but_weight_is_matched() {
 	let mut s = shaper();
 	let appearance = TextAppearance {
 		font: vec![
@@ -125,8 +129,8 @@ fn unavailable_variant_weight_and_family_are_skipped() {
 				synthetic_italic: false,
 			},
 			Font {
-				family: "Primary".into(),
-				variant: Variant::Italic,
+				family: "Fallback".into(),
+				variant: Variant::Normal,
 				weight: Some(400),
 				min_weight: None,
 				synthetic_italic: false,
@@ -281,7 +285,7 @@ fn explicit_regular_fallback_survives_bold_and_missing_primary() {
 	assert!(warning.contains("U+2A0E U+001B"));
 	assert!(!warning.contains('\u{1b}'));
 	assert!(warning.contains("weight 700"));
-	assert!(warning.contains("Available exact faces: []"));
+	assert!(warning.contains("Available faces: [\"Fallback\" (weight 400)]"));
 	assert!(s.fallback_warning(unavailable, "B").is_none());
 	// Reflows reset choices, but must not repeat terminal warnings.
 	s.set_stylesheet(s.stylesheet.clone());
@@ -637,7 +641,7 @@ fn the_bundled_emoji_face_beats_a_text_candidate_covering_the_cluster() {
 }
 
 #[test]
-fn cjk_medium_uses_an_explicit_regular_fallback_when_unavailable() {
+fn cjk_medium_matches_regular_in_the_same_candidate_when_unavailable() {
 	for medium_available in [false, true] {
 		let mut shaper = TextShaper::new();
 		if !medium_available {
@@ -665,7 +669,7 @@ fn cjk_medium_uses_an_explicit_regular_fallback_when_unavailable() {
 		}
 		let mut sheet = (*Stylesheet::bundled(false)).clone();
 		sheet.set_cjk_type(crate::style::CjkType::Sc);
-		sheet.merge(&Stylesheet::parse("format_version=2\nversion=1\n[[rule]]\nwhen=['ui']\nfont=[{family='sans-serif'},{family='sans-serif[cjk]',min_weight=500},{family='sans-serif[cjk]'},{family='emoji',weight=400}]").unwrap());
+		sheet.merge(&Stylesheet::parse("format_version=2\nversion=1\n[[rule]]\nwhen=['ui']\nfont=[{family='sans-serif'},{family='sans-serif[cjk]',min_weight=500},{family='emoji',weight=400}]").unwrap());
 		shaper.set_stylesheet(Arc::new(sheet));
 		let appearance = shaper
 			.stylesheet

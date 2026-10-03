@@ -1,6 +1,6 @@
 {
-  "name": "@markview/web",
-  "version": "0.1.10",
+  "name": "@markview/viewer",
+  "version": "0.1.11",
   "description": "Markdown rendered onto a canvas through the Markview engine compiled to WebAssembly",
   "license": "MIT",
   "type": "module",
@@ -10,13 +10,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./wasm": "./dist/markview_web_bg.wasm"
   },
   "files": [
     "dist"
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node ../build-package.mjs markview"
   }
 }

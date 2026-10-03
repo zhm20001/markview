@@ -451,17 +451,23 @@ impl TextShaper {
 								axis(b"ital", 0.) || axis(b"slnt", 0.)
 							}
 						};
-					let exact_weight = info.weight()
-						== FontWeight::new(weight as f32)
-						|| axis(b"wght", weight as f32);
 					// A candidate may shear an upright face when the family
 					// has no italic or oblique of its own.
 					let synthetic = !exact_style
 						&& candidate.synthetic_italic
 						&& info.style() == FontStyle::Normal;
-					if (!exact_style && !synthetic) || !exact_weight {
+					if !exact_style && !synthetic {
 						continue;
 					}
+					// Keep the family's closest match without asking `parley` to
+					// synthesize bold; variable faces use their available range.
+					let weight = info
+						.axes()
+						.iter()
+						.find(|axis| axis.tag.to_be_bytes() == *b"wght")
+						.map_or(info.weight().value() as u16, |axis| {
+							(weight as f32).clamp(axis.min, axis.max) as u16
+						});
 					if let Some(data) = info.load(Some(&mut fonts.source_cache))
 					{
 						faces.push(Face {
@@ -677,7 +683,7 @@ impl TextShaper {
 			.collect::<Vec<_>>()
 			.join(", ");
 		Some(format!(
-			"no face covers [{codes}]: the configured stack and the whole collection were scanned. Requested: [{}]. Available exact faces: [{}]. Install a font covering these code points, or point the font stack at one that does.{}",
+			"no face covers [{codes}]: the configured stack and the whole collection were scanned. Requested: [{}]. Available faces: [{}]. Install a font covering these code points, or point the font stack at one that does.{}",
 			requested,
 			resolved,
 			if self.warned_fallbacks.len() == LIMIT {

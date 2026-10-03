@@ -26,7 +26,7 @@ tempfile = "3"
 # Mirror the workspace patches so the harness fuzzes the same comrak the app
 # does; the mermaid patch is binary-crate-only and not needed here.
 [patch.crates-io]
-comrak = { git = "https://github.com/kivikakk/comrak", rev = "9b0e8ee12ca941642da46e1cebb396061b5d23da" }
+comrak = { git = "https://github.com/kivikakk/comrak", rev = "4127507465ee41e0a6298fd4b217b685a499af79" }
 
 # Overflow checks stay on (the `dev` default): an integer overflow in a
 # fuzzed path panics and becomes a regression test (O1).
@@ -135,6 +135,32 @@ bench = false
 [[bin]]
 name = "geometry"
 path = "fuzz_targets/geometry.rs"
+test = false
+doc = false
+bench = false
+
+# G1: reference-definition resolution against an independent source scan
+# (Tier 3).
+[[bin]]
+name = "refdef"
+path = "fuzz_targets/refdef.rs"
+test = false
+doc = false
+bench = false
+
+# G1: a node's source range must cover text that belongs to it (Tier 3).
+[[bin]]
+name = "sourcepos_content"
+path = "fuzz_targets/sourcepos_content.rs"
+test = false
+doc = false
+bench = false
+
+# G1: the `<details>` element the tree built must enclose the tags the source
+# wrote (Tier 3).
+[[bin]]
+name = "details_structure"
+path = "fuzz_targets/details_structure.rs"
 test = false
 doc = false
 bench = false

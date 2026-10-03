@@ -334,7 +334,7 @@ checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
 [[package]]
 name = "comrak"
 version = "0.55.0"
-source = "git+https://github.com/kivikakk/comrak?rev=9b0e8ee12ca941642da46e1cebb396061b5d23da#9b0e8ee12ca941642da46e1cebb396061b5d23da"
+source = "git+https://github.com/kivikakk/comrak?rev=4127507465ee41e0a6298fd4b217b685a499af79#4127507465ee41e0a6298fd4b217b685a499af79"
 dependencies = [
  "caseless",
  "entities",
@@ -1286,7 +1286,7 @@ dependencies = [
 
 [[package]]
 name = "markview-core"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "anyhow",
  "codex",
@@ -1298,6 +1298,7 @@ dependencies = [
  "log",
  "memmap2",
  "parley",
+ "percent-encoding",
  "ratex-layout",
  "ratex-parser",
  "ratex-types",
@@ -1328,7 +1329,7 @@ dependencies = [
 
 [[package]]
 name = "markview-pdf"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "anyhow",
  "krilla",
@@ -1345,7 +1346,7 @@ dependencies = [
 
 [[package]]
 name = "markview-render"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -1443,8 +1444,14 @@ name = "mvfuzz"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
+ "lopdf",
  "markview-core",
  "markview-pdf",
+ "percent-encoding",
+ "ratex-layout",
+ "ratex-parser",
+ "ratex-types",
+ "swash",
 ]
 
 [[package]]
